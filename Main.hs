@@ -43,7 +43,9 @@ instance Text (Ex Dependency) where
     disp (Ex (Dependency n vr)) = text "dev-haskell/" <> disp n <> disp (Ex vr)
 
 instance Text (Ex VersionRange) where
-    disp (Ex vr) = hcat . map (disp . Ex) $ asVersionIntervals vr
+    disp (Ex vr) = case asVersionIntervals vr of
+        [vi] -> disp (Ex vi)
+        _ -> error $ "Unsupported version range: " ++ display vr
 
 instance Text (Ex LowerBound) where
     disp (Ex (LowerBound v InclusiveBound)) = text ">=" <> disp v
