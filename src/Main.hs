@@ -16,6 +16,7 @@ import System.Environment
 import Distribution.Text
 import Distribution.Package
 import Distribution.Version
+import Distribution.License
 import Distribution.PackageDescription
 import Distribution.PackageDescription.Parse
 import Distribution.Verbosity
@@ -36,6 +37,16 @@ fetchPackageDescription pkgid = do
         url = baseUri ++ display pkgid ++ "/" ++ cabalFile
     ParseOk _ descr <- liftM parsePackageDescription $ simpleFetch url
     return descr
+
+softWidth width = build 0 [] where
+    build _ ys [] = [reverse ys]
+    build 0 [] (w:ws) = build (length w) [w] ws
+    build n ys (w:ws) | n' > width = reverse ys : build 0 [] (w:ws)
+                      | otherwise = build n' (w : ys) ws
+        where
+            n' = length w + n
+
+reflow width = vcat . map (text . unwords) . softWidth width . words
 
 newtype Ex a = Ex a
 
@@ -64,6 +75,12 @@ instance Text (Ex VersionInterval) where
     disp (Ex (lb, NoUpperBound)) = brackets (disp (Ex lb))
     disp (Ex (lb, ub)) = brackets (disp (Ex lb) <> text "&" <> disp (Ex ub))
     disp (Ex x) = error $ "Unknown " ++ show x
+
+instance Text (Ex License) where
+    disp (Ex (GPL (Just v))) = text "GPL-" <> disp v
+    disp (Ex (LGPL (Just v))) = text "LGPL-" <> disp v
+    disp (Ex BSD3) = text "BSD-3"
+    disp (Ex x) = error $ "Unsupported license: " ++ display x
 
 instance Text (Ex GenericPackageDescription) where
     disp (Ex descr) = exheres where
@@ -104,13 +121,48 @@ instance Text (Ex GenericPackageDescription) where
                 allTestDeps = concatMap (condTreeConstraints . snd) xs
                 testDeps = filter (not . ignoredTestDep) allTestDeps
 
-        dependencies = vcat [
+        exDependencies = vcat [
             text "DEPENDENCIES=\"",
             nest 4 exLibDeps,
             nest 4 exTestDeps,
             text "\""]
 
-        exheres = dependencies
+        pkgDescr = packageDescription descr
+
+        wrapWidth = 80
+
+        exField _ "" = empty
+        exField name x | length singleLine < wrapWidth = text singleLine
+                       | otherwise = multiLineDoc
+            where
+                singleLine = name ++ "=\"" ++ dquoted x ++ "\""
+                multiLineDoc = vcat [
+                    text name <> text "=\"",
+                    reflow wrapWidth (dquoted x),
+                    char '"'
+                    ]
+                dquoted [] = []
+                dquoted ('\\':xs) = "\\\\" ++ dquoted xs
+                dquoted ('"':xs) = "\\\"" ++ dquoted xs
+                dquoted (x:xs) = x : dquoted xs
+
+        exheres = vcat [
+            text "# Copyright 2015 Mykola Orliuk <virkony@gmail.com>",
+            text "# Distributed under the terms of the GNU General Public License v2",
+            text "",
+            text "require hackage",
+            text "",
+            exField "SUMMARY" (synopsis pkgDescr),
+            exField "DESCRIPTION" (description pkgDescr),
+            exField "HOMEPAGE" (homepage pkgDescr),
+            text "",
+            exField "LICENSES" (display . Ex $ license pkgDescr),
+            exField "PLATFORMS" "~amd64",
+            text "",
+            exDependencies,
+            text "",
+            exField "BUGS_TO" "virkony@gmail.com"
+            ]
 
 -- TODO: drop test deps that already in build
 -- TODO: handle executables
