@@ -182,6 +182,8 @@ main = do
         [] -> liftM lines getContents
         _ -> return args
     forM_ sources $ \source -> do
-        let pkgid = fromJust $ simpleParse source
-        descr <- fetchPackageDescription pkgid
+        descr <- case source of
+            ('.':_) -> readPackageDescription verbose source
+            ('/':_) -> readPackageDescription verbose source
+            _ -> fetchPackageDescription (fromJust $ simpleParse source)
         putStrLn (display $ Ex descr)
