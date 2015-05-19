@@ -65,49 +65,52 @@ instance Text (Ex VersionInterval) where
     disp (Ex (lb, ub)) = brackets (disp (Ex lb) <> text "&" <> disp (Ex ub))
     disp (Ex x) = error $ "Unknown " ++ show x
 
-exDeps descr = render dependencies where
-    [] = condExecutables descr -- no support for apps
+instance Text (Ex GenericPackageDescription) where
+    disp (Ex descr) = exheres where
+        [] = condExecutables descr -- no support for apps
 
-    name = pkgName . package $ packageDescription descr
-    nameSelf = pkgName . package $ packageDescription descr
-    nameBase = fromJust $ simpleParse "base"
+        name = pkgName . package $ packageDescription descr
+        nameSelf = pkgName . package $ packageDescription descr
+        nameBase = fromJust $ simpleParse "base"
 
-    ignoredDep (Dependency n _) | n == nameBase = True
-    ignoredDep _ = False
-    ignoredTestDep (Dependency n _) | n == nameSelf = True
-    ignoredTestDep d = ignoredDep d
+        ignoredDep (Dependency n _) | n == nameBase = True
+        ignoredDep _ = False
+        ignoredTestDep (Dependency n _) | n == nameSelf = True
+        ignoredTestDep d = ignoredDep d
 
-    a `depOrd` b = display a `compare` display b
+        a `depOrd` b = display a `compare` display b
 
-    mergeDeps [] = []
-    mergeDeps [x] = [x]
-    mergeDeps (x:y:z) = case (x, y) of
-        (Dependency n v, Dependency n' v') | n == n' ->
-            mergeDeps ((Dependency n (intersectVersionRanges v v')):z)
-        _ -> x : mergeDeps (y:z)
+        mergeDeps [] = []
+        mergeDeps [x] = [x]
+        mergeDeps (x:y:z) = case (x, y) of
+            (Dependency n v, Dependency n' v') | n == n' ->
+                mergeDeps ((Dependency n (intersectVersionRanges v v')):z)
+            _ -> x : mergeDeps (y:z)
 
-    exDepFn name deps = vcat [
-            text ("$(" ++ name) <> text " \"",
-            nest 4 . vcat . map (disp . Ex) $ mergeDeps sortedDeps,
-            text "\")"]
-        where
-            sortedDeps = sortBy depOrd deps
-            
-    exLibDeps = exDepFn "haskell_lib_dependencies" libDeps where
-        allLibDeps = (condTreeConstraints . fromJust . condLibrary) descr
-        libDeps = filter (not . ignoredDep) allLibDeps
+        exDepFn name deps = vcat [
+                text ("$(" ++ name) <> text " \"",
+                nest 4 . vcat . map (disp . Ex) $ mergeDeps sortedDeps,
+                text "\")"]
+            where
+                sortedDeps = sortBy depOrd deps
 
-    exTestDeps = case condTestSuites descr of
-        [] -> empty
-        xs -> exDepFn "haskell_test_dependencies" testDeps where
-            allTestDeps = concatMap (condTreeConstraints . snd) xs
-            testDeps = filter (not . ignoredTestDep) allTestDeps
+        exLibDeps = exDepFn "haskell_lib_dependencies" libDeps where
+            allLibDeps = (condTreeConstraints . fromJust . condLibrary) descr
+            libDeps = filter (not . ignoredDep) allLibDeps
 
-    dependencies = vcat [
-        text "DEPENDENCIES=\"",
-        nest 4 exLibDeps,
-        nest 4 exTestDeps,
-        text "\""]
+        exTestDeps = case condTestSuites descr of
+            [] -> empty
+            xs -> exDepFn "haskell_test_dependencies" testDeps where
+                allTestDeps = concatMap (condTreeConstraints . snd) xs
+                testDeps = filter (not . ignoredTestDep) allTestDeps
+
+        dependencies = vcat [
+            text "DEPENDENCIES=\"",
+            nest 4 exLibDeps,
+            nest 4 exTestDeps,
+            text "\""]
+
+        exheres = dependencies
 
 -- TODO: drop test deps that already in build
 -- TODO: handle executables
@@ -118,7 +121,7 @@ test = do
     print pkgid
     print (display pkgid)
     descr <- fetchPackageDescription pkgid
-    putStrLn (exDeps descr)
+    putStrLn (display $ Ex descr)
 
 main :: IO ()
 main = do
@@ -129,4 +132,4 @@ main = do
     forM_ sources $ \source -> do
         let pkgid = fromJust $ simpleParse source
         descr <- fetchPackageDescription pkgid
-        putStrLn (exDeps descr)
+        putStrLn (display $ Ex descr)
