@@ -48,6 +48,14 @@ softWidth width = build 0 [] where
 
 reflow width = vcat . map (text . unwords) . softWidth width . words
 
+-- wrap doc with spaces around
+spaces doc | isEmpty doc = empty
+           | otherwise = space <> doc <> space
+
+-- wrap with brackets non-empty doc
+nbrackets doc | isEmpty doc = empty
+              | otherwise = brackets doc
+
 newtype Ex a = Ex a
 
 instance Text (Ex Dependency) where
@@ -111,9 +119,17 @@ instance Text (Ex GenericPackageDescription) where
             where
                 sortedDeps = sortBy depOrd deps
 
-        exLibDeps = exDepFn "haskell_lib_dependencies" libDeps where
-            allLibDeps = (condTreeConstraints . fromJust . condLibrary) descr
-            libDeps = filter (not . ignoredDep) allLibDeps
+        exLibDeps | libDeps == [] = empty
+                  | otherwise = exDepFn "haskell_lib_dependencies" libDeps
+            where
+                allLibDeps = (maybe [] condTreeConstraints . condLibrary) descr
+                libDeps = filter (not . ignoredDep) allLibDeps
+
+        exBinDeps | binDeps == [] = empty
+                  | otherwise = exDepFn "haskell_bin_dependencies" binDeps
+            where
+                allBinDeps = concatMap (condTreeConstraints . snd) $ condExecutables descr
+                binDeps = filter (not . ignoredDep) allBinDeps
 
         exTestDeps = case condTestSuites descr of
             [] -> empty
@@ -125,6 +141,7 @@ instance Text (Ex GenericPackageDescription) where
             text "DEPENDENCIES=\"",
             nest 4 exLibDeps,
             nest 4 exTestDeps,
+            nest 4 exBinDeps,
             text "\""]
 
         pkgDescr = packageDescription descr
@@ -146,26 +163,36 @@ instance Text (Ex GenericPackageDescription) where
                 dquoted ('"':xs) = "\\\"" ++ dquoted xs
                 dquoted (x:xs) = x : dquoted xs
 
+        hasLib = condLibrary descr /= Nothing
+        hasBin = condExecutables descr /= []
+        exRequire = text "require hackage" <+> nbrackets exParams
+            where
+                exHasLib = if hasLib then empty else text "has_lib=false"
+                exHasBin = if hasBin then text "has_bin=true" else empty
+                exParams = spaces $ exHasLib <+> exHasBin
+
         exheres = vcat [
             text "# Copyright 2015 Mykola Orliuk <virkony@gmail.com>",
             text "# Distributed under the terms of the GNU General Public License v2",
             text "",
-            text "require hackage",
+            exRequire,
             text "",
             exField "SUMMARY" (synopsis pkgDescr),
             exField "DESCRIPTION" (description pkgDescr),
             exField "HOMEPAGE" (homepage pkgDescr),
             text "",
-            exField "LICENSES" (display . Ex $ license pkgDescr),
+            exField "LICENCES" (display . Ex $ license pkgDescr),
             exField "PLATFORMS" "~amd64",
             text "",
             exDependencies,
             text "",
-            exField "BUGS_TO" "virkony@gmail.com"
+            exField "BUGS_TO" "virkony@gmail.com",
+            text ""
             ]
 
 -- TODO: drop test deps that already in build
 -- TODO: handle executables
+-- TODO: use renderStyle instead of manual wrapping
 
 test = do
     -- let pkgid = fromJust $ simpleParse "yesod-core-1.4.9.1"
@@ -173,6 +200,10 @@ test = do
     print pkgid
     print (display pkgid)
     descr <- fetchPackageDescription pkgid
+    putStrLn (display $ Ex descr)
+
+selftest = do
+    descr <- readPackageDescription verbose "exherbo-cabal.cabal"
     putStrLn (display $ Ex descr)
 
 main :: IO ()
