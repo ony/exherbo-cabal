@@ -86,8 +86,11 @@ instance Text (Ex VersionInterval) where
 
 instance Text (Ex License) where
     disp (Ex (GPL (Just v))) = text "GPL-" <> disp v
+    disp (Ex (AGPL (Just v))) = text "AGPL-" <> disp v
     disp (Ex (LGPL (Just v))) = text "LGPL-" <> disp v
+    disp (Ex (Apache (Just v))) = text "Apache-" <> disp v
     disp (Ex BSD3) = text "BSD-3"
+    disp (Ex MIT) = text "MIT"
     disp (Ex x) = error $ "Unsupported license: " ++ display x
 
 instance Text (Ex GenericPackageDescription) where
