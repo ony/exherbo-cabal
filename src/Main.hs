@@ -188,11 +188,18 @@ instance Text (Ex GenericPackageDescription) where
                     ]
         hasLib = condLibrary descr /= Nothing
         hasBin = condExecutables descr /= []
+        hasMods = maybe False (([] /=) . exposedModules . condTreeData) . condLibrary $ descr
         exRequire = text "require hackage" <+> nbrackets exParams
             where
                 exHasLib = if hasLib then empty else text "has_lib=false"
                 exHasBin = if hasBin then text "has_bin=true" else empty
-                exParams = spaces $ exHasLib <+> exHasBin
+                exHasOptions | hasMods = empty
+                             | otherwise = hsep [
+                                 text "has_haddock=false",
+                                 text "has_hscolour=false",
+                                 text "has_profile=false"
+                                 ]
+                exParams = spaces $ exHasLib <+> exHasBin <+> exHasOptions
 
         exheres = vcat [
             text "# Copyright 2015 Mykola Orliuk <virkony@gmail.com>",
