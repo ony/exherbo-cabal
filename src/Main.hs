@@ -20,7 +20,14 @@ import Distribution.License
 import Distribution.PackageDescription
 import Distribution.PackageDescription.Parse
 import Distribution.Verbosity
+import Documentation.Haddock.Parser
+import Documentation.Haddock.Types
 import Network.HTTP.Client
+
+dquoted [] = []
+dquoted ('\\':xs) = "\\\\" ++ dquoted xs
+dquoted ('"':xs) = "\\\"" ++ dquoted xs
+dquoted (x:xs) = x : dquoted xs
 
 simpleFetch :: String -> IO String
 simpleFetch url = do
@@ -55,6 +62,21 @@ spaces doc | isEmpty doc = empty
 -- wrap with brackets non-empty doc
 nbrackets doc | isEmpty doc = empty
               | otherwise = brackets doc
+
+instance Text (Ex String) where
+    -- TODO: disp (Ex x) = sep . map text . words $ dquoted x
+    disp (Ex x) = text (dquoted x)
+
+instance Text (Ex (DocH mod String)) where
+    disp (Ex x) = case x of
+        DocEmpty -> empty
+        DocAppend a b -> disp (Ex a) <> disp (Ex b)
+        DocString s -> disp (Ex s)
+        DocEmphasis a -> disp (Ex a)
+        DocMonospaced a -> disp (Ex a)
+        DocBold a -> disp (Ex a)
+        DocHyperlink (Hyperlink _ (Just s)) -> disp (Ex s)
+        DocHyperlink (Hyperlink s Nothing) -> disp (Ex s)
 
 newtype Ex a = Ex a
 
@@ -151,6 +173,9 @@ instance Text (Ex GenericPackageDescription) where
 
         wrapWidth = 80
 
+        exFieldDoc name d | isEmpty d = empty
+        exFieldDoc name d = vcat [text name <> text "=\"", d, char '"']
+
         exField _ "" = empty
         exField name x | length singleLine < wrapWidth = text singleLine
                        | otherwise = multiLineDoc
@@ -161,11 +186,6 @@ instance Text (Ex GenericPackageDescription) where
                     reflow wrapWidth (dquoted x),
                     char '"'
                     ]
-                dquoted [] = []
-                dquoted ('\\':xs) = "\\\\" ++ dquoted xs
-                dquoted ('"':xs) = "\\\"" ++ dquoted xs
-                dquoted (x:xs) = x : dquoted xs
-
         hasLib = condLibrary descr /= Nothing
         hasBin = condExecutables descr /= []
         exRequire = text "require hackage" <+> nbrackets exParams
@@ -181,7 +201,7 @@ instance Text (Ex GenericPackageDescription) where
             exRequire,
             text "",
             exField "SUMMARY" (synopsis pkgDescr),
-            exField "DESCRIPTION" (description pkgDescr),
+            exFieldDoc "DESCRIPTION" (disp . Ex . toRegular . parseString $ description pkgDescr),
             exField "HOMEPAGE" (homepage pkgDescr),
             text "",
             exField "LICENCES" (display . Ex $ license pkgDescr),
