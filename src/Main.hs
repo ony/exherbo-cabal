@@ -72,6 +72,8 @@ instance Text (Ex (DocH mod String)) where
         DocEmpty -> empty
         DocAppend a b -> disp (Ex a) <> disp (Ex b)
         DocString s -> disp (Ex s)
+        DocParagraph a -> disp (Ex a)
+        DocIdentifier s -> disp (Ex s)
         DocEmphasis a -> disp (Ex a)
         DocMonospaced a -> disp (Ex a)
         DocBold a -> disp (Ex a)
@@ -127,6 +129,8 @@ instance Text (Ex GenericPackageDescription) where
         ignoredDep _ = False
         ignoredTestDep (Dependency n _) | n == nameSelf = True
         ignoredTestDep d = ignoredDep d
+        ignoredBinDep (Dependency n _) | n == nameSelf = True
+        ignoredBinDep d = ignoredDep d
 
         a `depOrd` b = display a `compare` display b
 
@@ -154,7 +158,7 @@ instance Text (Ex GenericPackageDescription) where
                   | otherwise = exDepFn "haskell_bin_dependencies" binDeps
             where
                 allBinDeps = concatMap (condTreeConstraints . snd) $ condExecutables descr
-                binDeps = filter (not . ignoredDep) allBinDeps
+                binDeps = filter (not . ignoredBinDep) allBinDeps
 
         exTestDeps = case condTestSuites descr of
             [] -> empty
