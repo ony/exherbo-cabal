@@ -1,6 +1,7 @@
 -- Copyright © 2015 Mykola Orliuk <virkony@gmail.com>
 -- Distributed under the terms of the GNU General Public License v2
 
+{-# LANGUAGE UnicodeSyntax #-}
 {-# LANGUAGE FlexibleInstances #-}
 
 module ExRender where
@@ -46,20 +47,20 @@ instance Text (Ex String) where
 
 instance Text (Ex (DocH mod String)) where
     disp (Ex x) = case x of
-        DocEmpty -> empty
-        DocAppend a b -> disp (Ex a) <> disp (Ex b)
-        DocString s -> disp (Ex s)
-        DocParagraph a -> disp (Ex a)
-        DocIdentifier s -> disp (Ex s)
-        DocModule s -> disp (Ex s)
-        DocWarning a -> disp (Ex a)
-        DocEmphasis a -> disp (Ex a)
-        DocMonospaced a -> disp (Ex a)
-        DocBold a -> disp (Ex a)
-        DocHyperlink (Hyperlink _ (Just s)) -> disp (Ex s)
-        DocHyperlink (Hyperlink s Nothing) -> disp (Ex s)
-        DocAName s -> disp (Ex s)
-        DocProperty s -> disp (Ex s)
+        DocEmpty → empty
+        DocAppend a b → disp (Ex a) <> disp (Ex b)
+        DocString s → disp (Ex s)
+        DocParagraph a → disp (Ex a)
+        DocIdentifier s → disp (Ex s)
+        DocModule s → disp (Ex s)
+        DocWarning a → disp (Ex a)
+        DocEmphasis a → disp (Ex a)
+        DocMonospaced a → disp (Ex a)
+        DocBold a → disp (Ex a)
+        DocHyperlink (Hyperlink _ (Just s)) → disp (Ex s)
+        DocHyperlink (Hyperlink s Nothing) → disp (Ex s)
+        DocAName s → disp (Ex s)
+        DocProperty s → disp (Ex s)
 
 newtype Ex a = Ex a
 
@@ -68,8 +69,8 @@ instance Text (Ex Dependency) where
 
 instance Text (Ex VersionRange) where
     disp (Ex vr) = case asVersionIntervals vr of
-        [vi] -> disp (Ex vi)
-        _ -> error $ "Unsupported version range: " ++ display vr
+        [vi] → disp (Ex vi)
+        _ → error $ "Unsupported version range: " ++ display vr
 
 instance Text (Ex LowerBound) where
     disp (Ex (LowerBound v InclusiveBound)) = text ">=" <> disp v
@@ -118,9 +119,9 @@ instance Text (Ex GenericPackageDescription) where
         mergeDeps [] = []
         mergeDeps [x] = [x]
         mergeDeps (x:y:z) = case (x, y) of
-            (Dependency n v, Dependency n' v') | n == n' ->
+            (Dependency n v, Dependency n' v') | n == n' →
                 mergeDeps ((Dependency n (intersectVersionRanges v v')):z)
-            _ -> x : mergeDeps (y:z)
+            _ → x : mergeDeps (y:z)
 
         exDepFn name deps = vcat [
                 text ("$(" ++ name) <> text " \"",
@@ -142,8 +143,8 @@ instance Text (Ex GenericPackageDescription) where
                 binDeps = filter (not . ignoredBinDep) allBinDeps
 
         exTestDeps = case condTestSuites descr of
-            [] -> empty
-            xs -> exDepFn "haskell_test_dependencies" testDeps where
+            [] → empty
+            xs → exDepFn "haskell_test_dependencies" testDeps where
                 allTestDeps = concatMap (condTreeConstraints . snd) xs
                 testDeps = filter (not . ignoredTestDep) allTestDeps
 

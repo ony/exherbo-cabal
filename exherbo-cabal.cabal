@@ -54,7 +54,10 @@ executable exherbo-cabal
   -- other-modules:       
   
   -- LANGUAGE extensions used by modules in this package.
-  other-extensions:    FlexibleInstances, ViewPatterns
+  other-extensions:
+    FlexibleInstances,
+    UnicodeSyntax,
+    ViewPatterns
   
   -- Other library packages from which modules are imported.
   build-depends:
