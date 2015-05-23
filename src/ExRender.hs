@@ -19,6 +19,7 @@ import Distribution.Package
 import Distribution.Version
 import Distribution.License
 import Distribution.Compiler
+import Distribution.System
 import Distribution.PackageDescription
 import Documentation.Haddock.Parser
 import Documentation.Haddock.Types
@@ -107,14 +108,18 @@ instance ExRender Dependency where
     exDisp (Dependency n vr) = "dev-haskell/" <> disp n <> exDisp vr
 
 instance ExRender License where
-    exDisp (GPL Nothing) = "GPL-2"
+    exDisp (GPL Nothing) = "Unspecified-GPL"
     exDisp (GPL (Just v)) = "GPL-" <> disp v
     exDisp (AGPL (Just v)) = "AGPL-" <> disp v
-    exDisp (LGPL Nothing) = "LGPL-2.1"
+    exDisp (LGPL Nothing) = "Unspecified-LGPL"
     exDisp (LGPL (Just v)) = "LGPL-" <> disp v
+    exDisp (Apache Nothing) = "Unspecified-Apache"
     exDisp (Apache (Just v)) = "Apache-" <> disp v
     exDisp BSD3 = "BSD-3"
+    exDisp BSD4 = "BSD-4"
     exDisp MIT = "MIT"
+    exDisp (UnknownLicense "BSD2") = "BSD-2"
+    exDisp (UnknownLicense "MPL-2") = "MPL-2.0"
     exDisp x = error $ "Unsupported license: " ++ display x
 
 instance ExRender GenericPackageDescription where
@@ -201,9 +206,17 @@ collectDeps ∷ (GenericPackageDescription → [CondTree ConfVar [Dependency] a]
 collectDeps view descr = concatMap build (view descr) where
     flags = M.fromList . map (flagName &&& id) $ genPackageFlags descr
     eval (Var (Flag k)) = flagDefault . fromJust $ M.lookup k flags
-    eval (CNot e) = not (eval e)
+    eval (Var (OS Linux)) = True -- TODO: solve this hard-coded OS assumption
+    eval (Var (OS _)) = False
+    eval (Var (Arch X86_64)) = True -- TODO: support other platforms besides amd64
+    eval (Var (Arch _)) = False
     eval (Var (Impl GHC vr)) = exGHCVersion `withinRange` vr
-    eval e = error $ "Unsupported expr " ++ show e
+    eval (Var (Impl _ _)) = False -- XXX: no support for non-GHC compilers
+    eval (Lit f) = f
+    eval (CNot e) = not (eval e)
+    eval (COr a b) = eval a || eval b
+    eval (CAnd a b) = eval a || eval b
+    -- eval e = error $ "Unsupported expr " ++ show e
 
     build t = condTreeConstraints t ++ concatMap buildOptional (condTreeComponents t)
 
