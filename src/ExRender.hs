@@ -51,11 +51,15 @@ instance Text (Ex (DocH mod String)) where
         DocString s -> disp (Ex s)
         DocParagraph a -> disp (Ex a)
         DocIdentifier s -> disp (Ex s)
+        DocModule s -> disp (Ex s)
+        DocWarning a -> disp (Ex a)
         DocEmphasis a -> disp (Ex a)
         DocMonospaced a -> disp (Ex a)
         DocBold a -> disp (Ex a)
         DocHyperlink (Hyperlink _ (Just s)) -> disp (Ex s)
         DocHyperlink (Hyperlink s Nothing) -> disp (Ex s)
+        DocAName s -> disp (Ex s)
+        DocProperty s -> disp (Ex s)
 
 newtype Ex a = Ex a
 
@@ -85,6 +89,7 @@ instance Text (Ex VersionInterval) where
     disp (Ex (lb, ub)) = brackets (disp (Ex lb) <> text "&" <> disp (Ex ub))
 
 instance Text (Ex License) where
+    disp (Ex (GPL Nothing)) = text "GPL-2"
     disp (Ex (GPL (Just v))) = text "GPL-" <> disp v
     disp (Ex (AGPL (Just v))) = text "AGPL-" <> disp v
     disp (Ex (LGPL (Just v))) = text "LGPL-" <> disp v
@@ -184,6 +189,7 @@ instance Text (Ex GenericPackageDescription) where
         exheres = vcat [
             text "# Copyright 2015 Mykola Orliuk <virkony@gmail.com>",
             text "# Distributed under the terms of the GNU General Public License v2",
+            text "# Generated from " <> disp (package pkgDescr) <> text ".cabal",
             text "",
             exRequire,
             text "",
