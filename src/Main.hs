@@ -50,5 +50,8 @@ main = do
         descr ← case source of
             ('.':_) → readPackageDescription verbose source
             ('/':_) → readPackageDescription verbose source
-            _ → fetchPackageDescription (fromJust $ simpleParse source)
+            (simpleParse → Just pkgId) -> fetchPackageDescription pkgId
+            _ -> error $ "Specified source " ++ show source
+                ++ " neither starts with '.' or '/' (local file)"
+                ++ " nor a valid packageIdentifier (to fetch from hackage)"
         putStrLn (exRender descr)
