@@ -7,10 +7,13 @@
 module Main where
 
 import Control.Monad
+import Control.Exception
 import Data.Maybe
 import Data.ByteString.Lazy.Char8 (unpack)
 
 import System.Environment
+import System.IO
+
 import Distribution.Text
 import Distribution.Package
 import Distribution.PackageDescription
@@ -54,4 +57,6 @@ main = do
             _ -> error $ "Specified source " ++ show source
                 ++ " neither starts with '.' or '/' (local file)"
                 ++ " nor a valid packageIdentifier (to fetch from hackage)"
-        putStrLn (exRender descr)
+        let handler ∷ SomeException → IO ()
+            handler e = hPutStrLn stderr $ "# Failed fetch/generate for " ++ show source ++ ": " ++ show e
+        catch (evaluate (exRender descr) >>= putStrLn) handler
