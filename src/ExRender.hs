@@ -2,6 +2,7 @@
 -- Distributed under the terms of the GNU General Public License v2
 
 {-# LANGUAGE UnicodeSyntax, ViewPatterns #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
 
 module ExRender (exDisp, exDispQ, exRender) where
@@ -78,17 +79,17 @@ instance ExRenderQ id => ExRenderQ (DocH mod id) where
         DocProperty s → exDispQ s
 
 instance ExRender LowerBound where
-    exDisp (LowerBound v InclusiveBound) = text ">=" <> disp v
-    exDisp (LowerBound v ExclusiveBound) = text ">" <> disp v
+    exDisp (LowerBound v InclusiveBound) = ">=" <> disp v
+    exDisp (LowerBound v ExclusiveBound) = ">" <> disp v
 
 instance ExRender UpperBound where
-    exDisp (UpperBound v InclusiveBound) = text "<=" <> disp v
-    exDisp (UpperBound v ExclusiveBound) = text "<" <> disp v
+    exDisp (UpperBound v InclusiveBound) = "<=" <> disp v
+    exDisp (UpperBound v ExclusiveBound) = "<" <> disp v
     exDisp x = error $ "Unsupported UpperBound: " ++ show x
 
 instance ExRender VersionInterval where
     exDisp (LowerBound v  InclusiveBound,
-            UpperBound v' InclusiveBound) | v == v' = brackets (text "=" <> disp v)
+            UpperBound v' InclusiveBound) | v == v' = brackets ("=" <> disp v)
     exDisp (LowerBound (Version [0] []) InclusiveBound, NoUpperBound) = empty
     exDisp (LowerBound (Version [0] []) InclusiveBound, ub) = brackets (exDisp ub)
     exDisp (lb, NoUpperBound) = brackets (exDisp lb)
@@ -100,17 +101,17 @@ instance ExRender VersionRange where
         _ → error $ "Unsupported version range: " ++ display vr
 
 instance ExRender Dependency where
-    exDisp (Dependency n vr) = text "dev-haskell/" <> disp n <> exDisp vr
+    exDisp (Dependency n vr) = "dev-haskell/" <> disp n <> exDisp vr
 
 instance ExRender License where
-    exDisp (GPL Nothing) = text "GPL-2"
-    exDisp (GPL (Just v)) = text "GPL-" <> disp v
-    exDisp (AGPL (Just v)) = text "AGPL-" <> disp v
-    exDisp (LGPL Nothing) = text "LGPL-2.1"
-    exDisp (LGPL (Just v)) = text "LGPL-" <> disp v
-    exDisp (Apache (Just v)) = text "Apache-" <> disp v
-    exDisp BSD3 = text "BSD-3"
-    exDisp MIT = text "MIT"
+    exDisp (GPL Nothing) = "GPL-2"
+    exDisp (GPL (Just v)) = "GPL-" <> disp v
+    exDisp (AGPL (Just v)) = "AGPL-" <> disp v
+    exDisp (LGPL Nothing) = "LGPL-2.1"
+    exDisp (LGPL (Just v)) = "LGPL-" <> disp v
+    exDisp (Apache (Just v)) = "Apache-" <> disp v
+    exDisp BSD3 = "BSD-3"
+    exDisp MIT = "MIT"
     exDisp x = error $ "Unsupported license: " ++ display x
 
 instance ExRender GenericPackageDescription where
@@ -138,9 +139,9 @@ instance ExRender GenericPackageDescription where
             _ → x : mergeDeps (y:z)
 
         exDepFn name deps = vcat [
-                text ("$(" ++ name) <> text " \"",
+                text ("$(" ++ name) <> " \"",
                 nest 4 . vcat . map exDisp $ mergeDeps sortedDeps,
-                text "\")"]
+                "\")"]
             where
                 sortedDeps = sortBy depOrd deps
 
@@ -160,18 +161,18 @@ instance ExRender GenericPackageDescription where
                 testDeps = filter (not . ignoredTestDep) (collectTestDeps descr)
 
         exDependencies = vcat [
-            text "DEPENDENCIES=\"",
+            "DEPENDENCIES=\"",
             nest 4 exLibDeps,
             nest 4 exTestDeps,
             nest 4 exBinDeps,
-            text "\""]
+            "\""]
 
         pkgDescr = packageDescription descr
 
         wrapWidth = 80
 
         exFieldDoc name d | isEmpty d = empty
-        exFieldDoc name d = vcat [text name <> text "=\"", d, char '"']
+        exFieldDoc name d = vcat [text name <> "=\"", d, char '"']
 
         exField _ "" = empty
         exField name x | length singleLine < wrapWidth = text singleLine
@@ -179,43 +180,43 @@ instance ExRender GenericPackageDescription where
             where
                 singleLine = name ++ "=\"" ++ dquoted x ++ "\""
                 multiLineDoc = vcat [
-                    text name <> text "=\"",
+                    text name <> "=\"",
                     reflow wrapWidth (dquoted x),
                     char '"'
                     ]
         hasLib = condLibrary descr /= Nothing
         hasBin = condExecutables descr /= []
         hasMods = maybe False (([] /=) . exposedModules . condTreeData) . condLibrary $ descr
-        exRequire = text "require hackage" <+> nbrackets exParams
+        exRequire = "require hackage" <+> nbrackets exParams
             where
-                exHasLib = if hasLib then empty else text "has_lib=false"
-                exHasBin = if hasBin then text "has_bin=true" else empty
+                exHasLib = if hasLib then empty else "has_lib=false"
+                exHasBin = if hasBin then "has_bin=true" else empty
                 exHasOptions | hasMods = empty
                              | otherwise = hsep [
-                                 text "has_haddock=false",
-                                 text "has_hscolour=false",
-                                 text "has_profile=false"
+                                 "has_haddock=false",
+                                 "has_hscolour=false",
+                                 "has_profile=false"
                                  ]
                 exParams = spaces $ exHasLib <+> exHasBin <+> exHasOptions
 
         exheres = vcat [
-            text "# Copyright 2015 Mykola Orliuk <virkony@gmail.com>",
-            text "# Distributed under the terms of the GNU General Public License v2",
-            text "# Generated from " <> disp (package pkgDescr) <> text ".cabal",
-            text "",
+            "# Copyright 2015 Mykola Orliuk <virkony@gmail.com>",
+            "# Distributed under the terms of the GNU General Public License v2",
+            "# Generated from " <> disp (package pkgDescr) <> ".cabal",
+            "",
             exRequire,
-            text "",
+            "",
             exField "SUMMARY" (synopsis pkgDescr),
             exFieldDoc "DESCRIPTION" (exDispQ . toRegular . parseString $ description pkgDescr),
             exField "HOMEPAGE" (homepage pkgDescr),
-            text "",
+            "",
             exField "LICENCES" (exRender $ license pkgDescr),
             exField "PLATFORMS" "~amd64",
-            text "",
+            "",
             exDependencies,
-            text "",
+            "",
             exField "BUGS_TO" "virkony@gmail.com",
-            text ""
+            ""
             ]
 
 collectDeps ∷ (GenericPackageDescription → [CondTree ConfVar [Dependency] a])
