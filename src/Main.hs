@@ -1,7 +1,6 @@
 -- Copyright © 2015 Mykola Orliuk <virkony@gmail.com>
 -- Distributed under the terms of the GNU General Public License v2
 
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ViewPatterns, UnicodeSyntax #-}
 
 module Main where

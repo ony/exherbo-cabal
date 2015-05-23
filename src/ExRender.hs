@@ -2,9 +2,9 @@
 -- Distributed under the terms of the GNU General Public License v2
 
 {-# LANGUAGE UnicodeSyntax, ViewPatterns #-}
-{-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 
-module ExRender (exDisp, exRender) where
+module ExRender (exDisp, exDispQ, exRender) where
 
 import Data.Maybe
 import Data.List
@@ -45,66 +45,76 @@ spaces doc | isEmpty doc = empty
 nbrackets doc | isEmpty doc = empty
               | otherwise = brackets doc
 
-instance Text (Ex String) where
-    -- TODO: disp (Ex x) = sep . map text . words $ dquoted x
-    disp (Ex x) = text (dquoted x)
+class ExRender a where
+    -- |Renders 'a' into a 'Doc' representing some part of exheres
+    exDisp :: a → Doc
 
-instance Text (Ex (DocH mod String)) where
-    disp (Ex x) = case x of
+class ExRenderQ a where
+    -- |Renders 'a' into a 'Doc' to be placed within double-quotes inside of exheres
+    exDispQ :: a → Doc
+
+instance ExRenderQ String where
+    -- TODO: exDispQ = sep . map text . words . dquoted
+    exDispQ = text . dquoted
+
+instance ExRender Identifier where exDisp (_, s, _) = text s
+instance ExRenderQ Identifier where exDispQ = exDisp
+
+instance ExRenderQ id => ExRenderQ (DocH mod id) where
+    exDispQ x = case x of
         DocEmpty → empty
-        DocAppend a b → disp (Ex a) <> disp (Ex b)
-        DocString s → disp (Ex s)
-        DocParagraph a → disp (Ex a)
-        DocIdentifier s → disp (Ex s)
-        DocModule s → disp (Ex s)
-        DocWarning a → disp (Ex a)
-        DocEmphasis a → disp (Ex a)
-        DocMonospaced a → disp (Ex a)
-        DocBold a → disp (Ex a)
-        DocHyperlink (Hyperlink _ (Just s)) → disp (Ex s)
-        DocHyperlink (Hyperlink s Nothing) → disp (Ex s)
-        DocAName s → disp (Ex s)
-        DocProperty s → disp (Ex s)
+        DocAppend a b → exDispQ a <> exDispQ b
+        DocString s → exDispQ s
+        DocParagraph a → exDispQ a
+        DocIdentifier s → exDispQ s
+        DocModule s → exDispQ s
+        DocWarning a → exDispQ a
+        DocEmphasis a → exDispQ a
+        DocMonospaced a → exDispQ a
+        DocBold a → exDispQ a
+        DocHyperlink (Hyperlink _ (Just s)) → exDispQ s
+        DocHyperlink (Hyperlink s Nothing) → exDispQ s
+        DocAName s → exDispQ s
+        DocProperty s → exDispQ s
 
-newtype Ex a = Ex a
+instance ExRender LowerBound where
+    exDisp (LowerBound v InclusiveBound) = text ">=" <> disp v
+    exDisp (LowerBound v ExclusiveBound) = text ">" <> disp v
 
-instance Text (Ex Dependency) where
-    disp (Ex (Dependency n vr)) = text "dev-haskell/" <> disp n <> disp (Ex vr)
+instance ExRender UpperBound where
+    exDisp (UpperBound v InclusiveBound) = text "<=" <> disp v
+    exDisp (UpperBound v ExclusiveBound) = text "<" <> disp v
+    exDisp x = error $ "Unsupported UpperBound: " ++ show x
 
-instance Text (Ex VersionRange) where
-    disp (Ex vr) = case asVersionIntervals vr of
-        [vi] → disp (Ex vi)
+instance ExRender VersionInterval where
+    exDisp (LowerBound v  InclusiveBound,
+            UpperBound v' InclusiveBound) | v == v' = brackets (text "=" <> disp v)
+    exDisp (LowerBound (Version [0] []) InclusiveBound, NoUpperBound) = empty
+    exDisp (LowerBound (Version [0] []) InclusiveBound, ub) = brackets (exDisp ub)
+    exDisp (lb, NoUpperBound) = brackets (exDisp lb)
+    exDisp (lb, ub) = brackets (exDisp lb <> char '&' <> exDisp ub)
+
+instance ExRender VersionRange where
+    exDisp vr = case asVersionIntervals vr of
+        [vi] → exDisp vi
         _ → error $ "Unsupported version range: " ++ display vr
 
-instance Text (Ex LowerBound) where
-    disp (Ex (LowerBound v InclusiveBound)) = text ">=" <> disp v
-    disp (Ex (LowerBound v ExclusiveBound)) = text ">" <> disp v
+instance ExRender Dependency where
+    exDisp (Dependency n vr) = text "dev-haskell/" <> disp n <> exDisp vr
 
-instance Text (Ex UpperBound) where
-    disp (Ex (UpperBound v InclusiveBound)) = text "<=" <> disp v
-    disp (Ex (UpperBound v ExclusiveBound)) = text "<" <> disp v
-    disp (Ex x) = error $ "Unknown " ++ show x
+instance ExRender License where
+    exDisp (GPL Nothing) = text "GPL-2"
+    exDisp (GPL (Just v)) = text "GPL-" <> disp v
+    exDisp (AGPL (Just v)) = text "AGPL-" <> disp v
+    exDisp (LGPL Nothing) = text "LGPL-2.1"
+    exDisp (LGPL (Just v)) = text "LGPL-" <> disp v
+    exDisp (Apache (Just v)) = text "Apache-" <> disp v
+    exDisp BSD3 = text "BSD-3"
+    exDisp MIT = text "MIT"
+    exDisp x = error $ "Unsupported license: " ++ display x
 
-instance Text (Ex VersionInterval) where
-    disp (Ex (LowerBound v  InclusiveBound,
-              UpperBound v' InclusiveBound)) | v == v' = brackets (text "=" <> disp v)
-    disp (Ex (LowerBound (Version [0] []) InclusiveBound, NoUpperBound)) = empty
-    disp (Ex (LowerBound (Version [0] []) InclusiveBound, ub)) = brackets (disp (Ex ub))
-    disp (Ex (lb, NoUpperBound)) = brackets (disp (Ex lb))
-    disp (Ex (lb, ub)) = brackets (disp (Ex lb) <> text "&" <> disp (Ex ub))
-
-instance Text (Ex License) where
-    disp (Ex (GPL Nothing)) = text "GPL-2"
-    disp (Ex (GPL (Just v))) = text "GPL-" <> disp v
-    disp (Ex (AGPL (Just v))) = text "AGPL-" <> disp v
-    disp (Ex (LGPL (Just v))) = text "LGPL-" <> disp v
-    disp (Ex (Apache (Just v))) = text "Apache-" <> disp v
-    disp (Ex BSD3) = text "BSD-3"
-    disp (Ex MIT) = text "MIT"
-    disp (Ex x) = error $ "Unsupported license: " ++ display x
-
-instance Text (Ex GenericPackageDescription) where
-    disp (Ex descr) = exheres where
+instance ExRender GenericPackageDescription where
+    exDisp descr = exheres where
         [] = condExecutables descr -- no support for apps
 
         name = pkgName . package $ packageDescription descr
@@ -129,7 +139,7 @@ instance Text (Ex GenericPackageDescription) where
 
         exDepFn name deps = vcat [
                 text ("$(" ++ name) <> text " \"",
-                nest 4 . vcat . map (disp . Ex) $ mergeDeps sortedDeps,
+                nest 4 . vcat . map exDisp $ mergeDeps sortedDeps,
                 text "\")"]
             where
                 sortedDeps = sortBy depOrd deps
@@ -196,10 +206,10 @@ instance Text (Ex GenericPackageDescription) where
             exRequire,
             text "",
             exField "SUMMARY" (synopsis pkgDescr),
-            exFieldDoc "DESCRIPTION" (disp . Ex . toRegular . parseString $ description pkgDescr),
+            exFieldDoc "DESCRIPTION" (exDispQ . toRegular . parseString $ description pkgDescr),
             exField "HOMEPAGE" (homepage pkgDescr),
             text "",
-            exField "LICENCES" (display . Ex $ license pkgDescr),
+            exField "LICENCES" (exRender $ license pkgDescr),
             exField "PLATFORMS" "~amd64",
             text "",
             exDependencies,
@@ -230,8 +240,6 @@ collectTestDeps = collectDeps (map snd . condTestSuites)
 -- TODO: drop test deps that already in build
 -- TODO: use renderStyle instead of manual wrapping
 
-exDisp ∷ Text (Ex a) ⇒ a → Doc
-exDisp = disp . Ex
-
-exRender ∷ Text (Ex a) ⇒ a → String
+-- |Render 'a' to a final part of Exheres
+exRender ∷ ExRender a ⇒ a → String
 exRender = render . exDisp
