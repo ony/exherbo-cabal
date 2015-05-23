@@ -17,6 +17,7 @@ import Distribution.Text
 import Distribution.Package
 import Distribution.Version
 import Distribution.License
+import Distribution.Compiler
 import Distribution.PackageDescription
 import Documentation.Haddock.Parser
 import Documentation.Haddock.Types
@@ -86,7 +87,7 @@ instance Text (Ex UpperBound) where
 
 instance Text (Ex VersionInterval) where
     disp (Ex (LowerBound v  InclusiveBound,
-              UpperBound v' InclusiveBound)) | v == v' = brackets (text "==" <> disp v)
+              UpperBound v' InclusiveBound)) | v == v' = brackets (text "=" <> disp v)
     disp (Ex (LowerBound (Version [0] []) InclusiveBound, NoUpperBound)) = empty
     disp (Ex (LowerBound (Version [0] []) InclusiveBound, ub)) = brackets (disp (Ex ub))
     disp (Ex (lb, NoUpperBound)) = brackets (disp (Ex lb))
@@ -108,9 +109,9 @@ instance Text (Ex GenericPackageDescription) where
 
         name = pkgName . package $ packageDescription descr
         nameSelf = pkgName . package $ packageDescription descr
-        nameBase = fromJust $ simpleParse "base"
+        ignoredPkgIds = map (fromJust . simpleParse) ["base", "ghc", "ghc-prim"]
 
-        ignoredDep (Dependency n _) | n == nameBase = True
+        ignoredDep (Dependency n _) | n `elem` ignoredPkgIds = True
         ignoredDep _ = False
         ignoredTestDep (Dependency n _) | n == nameSelf = True
         ignoredTestDep d = ignoredDep d
@@ -207,13 +208,13 @@ instance Text (Ex GenericPackageDescription) where
             text ""
             ]
 
-
 collectDeps ∷ (GenericPackageDescription → [CondTree ConfVar [Dependency] a])
               → GenericPackageDescription → [Dependency]
 collectDeps view descr = concatMap build (view descr) where
     flags = M.fromList . map (flagName &&& id) $ genPackageFlags descr
     eval (Var (Flag k)) = flagDefault . fromJust $ M.lookup k flags
     eval (CNot e) = not (eval e)
+    eval (Var (Impl GHC vr)) = Version [7, 8, 2] [] `withinRange` vr -- TODO: solve this hard-coded assumption
     eval e = error $ "Unsupported expr " ++ show e
 
     build t = condTreeConstraints t ++ concatMap buildOptional (condTreeComponents t)
