@@ -1,14 +1,17 @@
 -- Copyright © 2015 Mykola Orliuk <virkony@gmail.com>
 -- Distributed under the terms of the GNU General Public License v2
 
-{-# LANGUAGE UnicodeSyntax #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE UnicodeSyntax, ViewPatterns #-}
+{-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
 
-module ExRender where
+module ExRender (exDisp, exRender) where
 
 import Data.Maybe
 import Data.List
+import qualified Data.Map as M
 import Text.PrettyPrint
+
+import Control.Arrow ((&&&))
 
 import Distribution.Text
 import Distribution.Package
@@ -133,20 +136,17 @@ instance Text (Ex GenericPackageDescription) where
         exLibDeps | libDeps == [] = empty
                   | otherwise = exDepFn "haskell_lib_dependencies" libDeps
             where
-                allLibDeps = (maybe [] condTreeConstraints . condLibrary) descr
-                libDeps = filter (not . ignoredDep) allLibDeps
+                libDeps = filter (not . ignoredDep) (collectLibDeps descr)
 
         exBinDeps | binDeps == [] = empty
                   | otherwise = exDepFn "haskell_bin_dependencies" binDeps
             where
-                allBinDeps = concatMap (condTreeConstraints . snd) $ condExecutables descr
-                binDeps = filter (not . ignoredBinDep) allBinDeps
+                binDeps = filter (not . ignoredBinDep) (collectBinDeps descr)
 
         exTestDeps = case condTestSuites descr of
             [] → empty
             xs → exDepFn "haskell_test_dependencies" testDeps where
-                allTestDeps = concatMap (condTreeConstraints . snd) xs
-                testDeps = filter (not . ignoredTestDep) allTestDeps
+                testDeps = filter (not . ignoredTestDep) (collectTestDeps descr)
 
         exDependencies = vcat [
             text "DEPENDENCIES=\"",
@@ -207,5 +207,30 @@ instance Text (Ex GenericPackageDescription) where
             text ""
             ]
 
+
+collectDeps ∷ (GenericPackageDescription → [CondTree ConfVar [Dependency] a])
+              → GenericPackageDescription → [Dependency]
+collectDeps view descr = concatMap build (view descr) where
+    flags = M.fromList . map (flagName &&& id) $ genPackageFlags descr
+    eval (Var (Flag k)) = flagDefault . fromJust $ M.lookup k flags
+    eval (CNot e) = not (eval e)
+    eval e = error $ "Unsupported expr " ++ show e
+
+    build t = condTreeConstraints t ++ concatMap buildOptional (condTreeComponents t)
+
+    buildOptional (eval → True, t, _) = build t
+    buildOptional (eval → False, _, Just t) = build t
+    buildOptional (eval → False, _, Nothing) = []
+
+collectLibDeps = collectDeps (maybeToList . condLibrary)
+collectBinDeps = collectDeps (map snd . condExecutables)
+collectTestDeps = collectDeps (map snd . condTestSuites)
+
 -- TODO: drop test deps that already in build
 -- TODO: use renderStyle instead of manual wrapping
+
+exDisp ∷ Text (Ex a) ⇒ a → Doc
+exDisp = disp . Ex
+
+exRender ∷ Text (Ex a) ⇒ a → String
+exRender = render . exDisp

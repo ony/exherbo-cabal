@@ -38,7 +38,7 @@ fetchPackageDescription pkgid = do
 
 selftest = do
     descr <- readPackageDescription verbose "exherbo-cabal.cabal"
-    putStrLn (display $ Ex descr)
+    putStrLn (exRender descr)
 
 main ∷ IO ()
 main = do
@@ -51,4 +51,4 @@ main = do
             ('.':_) → readPackageDescription verbose source
             ('/':_) → readPackageDescription verbose source
             _ → fetchPackageDescription (fromJust $ simpleParse source)
-        putStrLn (display $ Ex descr)
+        putStrLn (exRender descr)
