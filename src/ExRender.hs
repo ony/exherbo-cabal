@@ -23,6 +23,9 @@ import Distribution.PackageDescription
 import Documentation.Haddock.Parser
 import Documentation.Haddock.Types
 
+exWrapWidth = 80 :: Int
+exGHCVersion = Version [7, 8, 2] [] -- TODO: solve this hard-coded GHC version assumption
+
 dquoted [] = []
 dquoted ('\\':xs) = "\\\\" ++ dquoted xs
 dquoted ('"':xs) = "\\\"" ++ dquoted xs
@@ -116,8 +119,6 @@ instance ExRender License where
 
 instance ExRender GenericPackageDescription where
     exDisp descr = exheres where
-        [] = condExecutables descr -- no support for apps
-
         name = pkgName . package $ packageDescription descr
         nameSelf = pkgName . package $ packageDescription descr
         ignoredPkgIds = map (fromJust . simpleParse) ["base", "ghc", "ghc-prim"]
@@ -129,21 +130,10 @@ instance ExRender GenericPackageDescription where
         ignoredBinDep (Dependency n _) | n == nameSelf = True
         ignoredBinDep d = ignoredDep d
 
-        a `depOrd` b = display a `compare` display b
-
-        mergeDeps [] = []
-        mergeDeps [x] = [x]
-        mergeDeps (x:y:z) = case (x, y) of
-            (Dependency n v, Dependency n' v') | n == n' →
-                mergeDeps ((Dependency n (intersectVersionRanges v v')):z)
-            _ → x : mergeDeps (y:z)
-
         exDepFn name deps = vcat [
                 text ("$(" ++ name) <> " \"",
-                nest 4 . vcat . map exDisp $ mergeDeps sortedDeps,
+                nest 4 . vcat . map exDisp . mergeSortedDeps $ sortDeps deps,
                 "\")"]
-            where
-                sortedDeps = sortBy depOrd deps
 
         exLibDeps | libDeps == [] = empty
                   | otherwise = exDepFn "haskell_lib_dependencies" libDeps
@@ -169,21 +159,6 @@ instance ExRender GenericPackageDescription where
 
         pkgDescr = packageDescription descr
 
-        wrapWidth = 80
-
-        exFieldDoc name d | isEmpty d = empty
-        exFieldDoc name d = vcat [text name <> "=\"", d, char '"']
-
-        exField _ "" = empty
-        exField name x | length singleLine < wrapWidth = text singleLine
-                       | otherwise = multiLineDoc
-            where
-                singleLine = name ++ "=\"" ++ dquoted x ++ "\""
-                multiLineDoc = vcat [
-                    text name <> "=\"",
-                    reflow wrapWidth (dquoted x),
-                    char '"'
-                    ]
         hasLib = condLibrary descr /= Nothing
         hasBin = condExecutables descr /= []
         hasMods = maybe False (([] /=) . exposedModules . condTreeData) . condLibrary $ descr
@@ -219,13 +194,15 @@ instance ExRender GenericPackageDescription where
             ""
             ]
 
+-- |Collect dependencies from all 'CondTree' nodes of
+-- 'GenericPackageDescription' using provided view
 collectDeps ∷ (GenericPackageDescription → [CondTree ConfVar [Dependency] a])
               → GenericPackageDescription → [Dependency]
 collectDeps view descr = concatMap build (view descr) where
     flags = M.fromList . map (flagName &&& id) $ genPackageFlags descr
     eval (Var (Flag k)) = flagDefault . fromJust $ M.lookup k flags
     eval (CNot e) = not (eval e)
-    eval (Var (Impl GHC vr)) = Version [7, 8, 2] [] `withinRange` vr -- TODO: solve this hard-coded assumption
+    eval (Var (Impl GHC vr)) = exGHCVersion `withinRange` vr
     eval e = error $ "Unsupported expr " ++ show e
 
     build t = condTreeConstraints t ++ concatMap buildOptional (condTreeComponents t)
@@ -238,9 +215,34 @@ collectLibDeps = collectDeps (maybeToList . condLibrary)
 collectBinDeps = collectDeps (map snd . condExecutables)
 collectTestDeps = collectDeps (map snd . condTestSuites)
 
--- TODO: drop test deps that already in build
--- TODO: use renderStyle instead of manual wrapping
-
 -- |Render 'a' to a final part of Exheres
 exRender ∷ ExRender a ⇒ a → String
 exRender = render . exDisp
+
+-- |Render a multi-line meta-field of Exheres if non-empty value
+exFieldDoc ∷ String → Doc → Doc
+exFieldDoc name value | isEmpty value = empty
+                      | otherwise = vcat [text name <> "=\"", value, char '"']
+
+-- |Render a single-line with potential wrap meta-field of Exheres if non-empty value
+exField _ "" = empty
+exField name x | length singleLine < exWrapWidth = text singleLine
+               | otherwise = exFieldDoc name (reflow exWrapWidth (dquoted x))
+    where
+        singleLine = name ++ "=\"" ++ dquoted x ++ "\""
+
+-- |Sort dependencies according to Exherbo order
+sortDeps ∷ [Dependency] → [Dependency]
+sortDeps = sortBy (\a b → display a `compare` display b)
+
+-- |Merge sorted deps to through applying the most tighten ones
+mergeSortedDeps ∷ [Dependency] → [Dependency]
+mergeSortedDeps [] = []
+mergeSortedDeps [x] = [x]
+mergeSortedDeps (x:y:z) = case (x, y) of
+    (Dependency n v, Dependency n' v') | n == n' →
+        mergeSortedDeps ((Dependency n (intersectVersionRanges v v')):z)
+    _ → x : mergeSortedDeps (y:z)
+
+-- TODO: drop test deps that already in build
+-- TODO: use renderStyle instead of manual wrapping

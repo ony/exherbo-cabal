@@ -22,6 +22,7 @@ import Network.HTTP.Client
 
 import ExRender
 
+-- |Fetch content by provided URI
 simpleFetch ∷ String → IO String
 simpleFetch url = do
     let settings = defaultManagerSettings
@@ -29,18 +30,15 @@ simpleFetch url = do
     withManager settings $ \man → do
         liftM (unpack . responseBody) $ httpLbs req man
 
+-- |Fetch and parse cabal file for specific 'PackageIdentifier' using URL build
+-- in form of http://hackage.haskell.org/package/<pkgid>/<pkgname>.cabal
 fetchPackageDescription ∷ PackageIdentifier → IO GenericPackageDescription
 fetchPackageDescription pkgid = do
-    -- http://hackage.haskell.org/package/happstack-server-7.4.4/happstack-server.cabal
     let baseUri = "http://hackage.haskell.org/package/"
         cabalFile = display (packageName pkgid) ++ ".cabal"
         url = baseUri ++ display pkgid ++ "/" ++ cabalFile
     ParseOk _ descr ← liftM parsePackageDescription $ simpleFetch url
     return descr
-
-selftest = do
-    descr <- readPackageDescription verbose "exherbo-cabal.cabal"
-    putStrLn (exRender descr)
 
 main ∷ IO ()
 main = do
