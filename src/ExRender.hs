@@ -80,8 +80,10 @@ instance ExRenderQ id => ExRenderQ (DocH mod id) where
         DocBold a → exDispQ a
         DocHyperlink (Hyperlink _ (Just s)) → exDispQ s
         DocHyperlink (Hyperlink s Nothing) → exDispQ s
+        DocPic _ → empty -- XXX: no images in description
         DocAName s → exDispQ s
         DocProperty s → exDispQ s
+        DocExamples _ → empty -- XXX: examples are filtered out
 
 instance ExRender LowerBound where
     exDisp (LowerBound v InclusiveBound) = ">=" <> disp v
@@ -184,7 +186,7 @@ instance ExRender GenericPackageDescription where
         exheres = vcat [
             "# Copyright 2015 Mykola Orliuk <virkony@gmail.com>",
             "# Distributed under the terms of the GNU General Public License v2",
-            "# Generated from " <> disp (package pkgDescr) <> ".cabal",
+            "# Generated for " <> disp (package pkgDescr),
             "",
             exRequire,
             "",
