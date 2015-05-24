@@ -46,6 +46,9 @@ extra-source-files:  README.md
 -- Constraint on the version of Cabal needed to build this package.
 cabal-version:       >=1.10
 
+source-repository head
+  type:     git
+  location: https://github.com/ony/exherbo-cabal
 
 executable exherbo-cabal
   -- .hs or .lhs file containing the Main module.
