@@ -5,6 +5,7 @@
 
 module Main where
 
+import Control.Applicative
 import Control.Monad
 import Control.Exception
 import Data.Maybe
@@ -31,9 +32,9 @@ simpleFetch ∷ String → IO String
 simpleFetch url = do
     let settings = defaultManagerSettings
     req ← parseUrl url
-    withManager settings $ \man → do
-        liftM (unpack . responseBody) $ httpLbs req man
+    withManager settings $ liftM (unpack . responseBody) . httpLbs req
 
+licenseHints ∷ [(R.Regex, License)]
 licenseHints = [
     (R.compile "http://creativecommons\\.org/publicdomain/zero/1\\.0/" [R.multiline], UnknownLicense "CC0"),
     (R.compile "http://www\\.apache\\.org/licenses/LICENSE-2\\.0" [R.multiline], Apache (Just $ Version [2, 0] [])),
@@ -42,12 +43,13 @@ licenseHints = [
     ]
 
 guessLicense ∷ String → IO License
-guessLicense text | isJust license = return $ fromJust license where
-    license = listToMaybe $ mapMaybe hint licenseHints
-    hint (re, answer) = fmap (const answer) $ R.match re text []
+guessLicense text | isJust foundLicense = return $ fromJust foundLicense where
+    foundLicense = listToMaybe $ mapMaybe hint licenseHints
+    hint (re, answer) = const answer <$> R.match re text []
 
 guessLicense _ = return OtherLicense
 
+hackageBaseUri ∷ String
 hackageBaseUri = "http://hackage.haskell.org/package/"
 
 fixLicense ∷ GenericPackageDescription → IO GenericPackageDescription

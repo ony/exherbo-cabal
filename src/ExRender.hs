@@ -9,6 +9,7 @@ module ExRender (exDisp, exDispQ, exRender) where
 
 import Data.Maybe
 import Data.List
+import Data.Function
 import qualified Data.Map as M
 import Text.PrettyPrint
 
@@ -22,17 +23,24 @@ import Distribution.Compiler
 import Distribution.System
 import Distribution.PackageDescription
 import Documentation.Haddock.Parser
-import Documentation.Haddock.Types
+import Documentation.Haddock.Types hiding (Version)
 
-exWrapWidth = 80 :: Int
+exWrapWidth ∷ Int
+exWrapWidth = 80
+
+exGHCVersion ∷ Version
 exGHCVersion = Version [7, 8, 2] [] -- TODO: solve this hard-coded GHC version assumption
+
+exKnownLicenses ∷ [String]
 exKnownLicenses = ["CC0"]
 
+dquoted ∷ String → String
 dquoted [] = []
 dquoted ('\\':xs) = "\\\\" ++ dquoted xs
 dquoted ('"':xs) = "\\\"" ++ dquoted xs
 dquoted (x:xs) = x : dquoted xs
 
+softWidth ∷ Int → [String] → [[String]]
 softWidth width = build 0 [] where
     build _ ys [] = [reverse ys]
     build 0 [] (w:ws) = build (length w) [w] ws
@@ -41,13 +49,16 @@ softWidth width = build 0 [] where
         where
             n' = length w + n
 
+reflow ∷ Int → String → Doc
 reflow width = vcat . map (text . unwords) . softWidth width . words
 
--- wrap doc with spaces around
+-- |Wrap doc with spaces around
+spaces ∷ Doc → Doc
 spaces doc | isEmpty doc = empty
            | otherwise = space <> doc <> space
 
--- wrap with brackets non-empty doc
+-- |Wrap with brackets non-empty doc
+nbrackets ∷ Doc → Doc
 nbrackets doc | isEmpty doc = empty
               | otherwise = brackets doc
 
@@ -128,7 +139,6 @@ instance ExRender License where
 
 instance ExRender GenericPackageDescription where
     exDisp descr = exheres where
-        name = pkgName . package $ packageDescription descr
         nameSelf = pkgName . package $ packageDescription descr
         ignoredPkgIds = map (fromJust . simpleParse) ["base", "ghc", "ghc-prim"]
 
@@ -144,19 +154,19 @@ instance ExRender GenericPackageDescription where
                 nest 4 . vcat . map exDisp . mergeSortedDeps $ sortDeps deps,
                 "\")"]
 
-        exLibDeps | libDeps == [] = empty
+        exLibDeps | null libDeps = empty
                   | otherwise = exDepFn "haskell_lib_dependencies" libDeps
             where
                 libDeps = filter (not . ignoredDep) (collectLibDeps descr)
 
-        exBinDeps | binDeps == [] = empty
+        exBinDeps | null binDeps = empty
                   | otherwise = exDepFn "haskell_bin_dependencies" binDeps
             where
                 binDeps = filter (not . ignoredBinDep) (collectBinDeps descr)
 
         exTestDeps = case condTestSuites descr of
             [] → empty
-            xs → exDepFn "haskell_test_dependencies" testDeps where
+            _ → exDepFn "haskell_test_dependencies" testDeps where
                 testDeps = filter (not . ignoredTestDep) (collectTestDeps descr)
 
         exDependencies = vcat [
@@ -168,9 +178,9 @@ instance ExRender GenericPackageDescription where
 
         pkgDescr = packageDescription descr
 
-        hasLib = condLibrary descr /= Nothing
-        hasBin = condExecutables descr /= []
-        hasMods = maybe False (([] /=) . exposedModules . condTreeData) . condLibrary $ descr
+        hasLib = isJust $ condLibrary descr
+        hasBin = not . null $ condExecutables descr
+        hasMods = maybe False (not . null . exposedModules . condTreeData) . condLibrary $ descr
         exRequire = "require hackage" <+> nbrackets exParams
             where
                 exHasLib = if hasLib then empty else "has_lib=false"
@@ -228,6 +238,7 @@ collectDeps view descr = concatMap build (view descr) where
     buildOptional (eval → False, _, Just t) = build t
     buildOptional (eval → False, _, Nothing) = []
 
+collectLibDeps, collectBinDeps, collectTestDeps ∷ GenericPackageDescription → [Dependency]
 collectLibDeps = collectDeps (maybeToList . condLibrary)
 collectBinDeps = collectDeps (map snd . condExecutables)
 collectTestDeps = collectDeps (map snd . condTestSuites)
@@ -242,6 +253,7 @@ exFieldDoc name value | isEmpty value = empty
                       | otherwise = vcat [text name <> "=\"", value, char '"']
 
 -- |Render a single-line with potential wrap meta-field of Exheres if non-empty value
+exField ∷ String → String → Doc
 exField _ "" = empty
 exField name x | length singleLine < exWrapWidth = text singleLine
                | otherwise = exFieldDoc name (reflow exWrapWidth (dquoted x))
@@ -250,7 +262,7 @@ exField name x | length singleLine < exWrapWidth = text singleLine
 
 -- |Sort dependencies according to Exherbo order
 sortDeps ∷ [Dependency] → [Dependency]
-sortDeps = sortBy (\a b → display a `compare` display b)
+sortDeps = sortBy (compare `on` display)
 
 -- |Merge sorted deps to through applying the most tighten ones
 mergeSortedDeps ∷ [Dependency] → [Dependency]
@@ -258,7 +270,7 @@ mergeSortedDeps [] = []
 mergeSortedDeps [x] = [x]
 mergeSortedDeps (x:y:z) = case (x, y) of
     (Dependency n v, Dependency n' v') | n == n' →
-        mergeSortedDeps ((Dependency n (intersectVersionRanges v v')):z)
+        mergeSortedDeps (Dependency n (intersectVersionRanges v v') : z)
     _ → x : mergeSortedDeps (y:z)
 
 -- TODO: drop test deps that already in build
