@@ -185,7 +185,7 @@ instance ExRender GenericPackageDescription where
             where
                 exHasLib = if hasLib then empty else "has_lib=false"
                 exHasBin = if hasBin then "has_bin=true" else empty
-                exHasOptions | hasMods = empty
+                exHasOptions | hasMods || not hasLib = empty
                              | otherwise = hsep [
                                  "has_haddock=false",
                                  "has_hscolour=false",
