@@ -26,6 +26,7 @@ import Documentation.Haddock.Types
 
 exWrapWidth = 80 :: Int
 exGHCVersion = Version [7, 8, 2] [] -- TODO: solve this hard-coded GHC version assumption
+exKnownLicenses = ["CC0"]
 
 dquoted [] = []
 dquoted ('\\':xs) = "\\\\" ++ dquoted xs
@@ -120,6 +121,7 @@ instance ExRender License where
     exDisp MIT = "MIT"
     exDisp (UnknownLicense "BSD2") = "BSD-2"
     exDisp (UnknownLicense "MPL-2") = "MPL-2.0"
+    exDisp (UnknownLicense x) | x `elem` exKnownLicenses = text x
     exDisp x = error $ "Unsupported license: " ++ display x
 
 instance ExRender GenericPackageDescription where

@@ -68,6 +68,7 @@ executable exherbo-cabal
     containers,
     haddock-library >=1.0 && <1.3,
     http-client >=0.4 && <0.5,
+    pcre-light <0.5,
     pretty >=1.1 && <1.2
   
   -- Directories containing source files.
