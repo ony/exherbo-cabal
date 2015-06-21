@@ -29,7 +29,7 @@ exWrapWidth ∷ Int
 exWrapWidth = 80
 
 exGHCVersion ∷ Version
-exGHCVersion = Version [7, 8, 2] [] -- TODO: solve this hard-coded GHC version assumption
+exGHCVersion = Version [7, 10, 1] [] -- TODO: solve this hard-coded GHC version assumption
 
 exKnownLicenses ∷ [String]
 exKnownLicenses = ["CC0"]
