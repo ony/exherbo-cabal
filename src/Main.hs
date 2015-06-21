@@ -59,7 +59,7 @@ fixLicense descr | license pkgDescr == OtherLicense = adjustLicense
         pkgDescr = packageDescription descr
         packageUri = hackageBaseUri ++ display (package pkgDescr)
         adjustLicense = do
-            let licensePath = licenseFile pkgDescr
+            let licensePath = head $ licenseFiles pkgDescr -- TODO: proper handling of multiple licenses
             licenseContent ← simpleFetch (packageUri ++ "/src/" ++ licensePath)
             license' ← guessLicense licenseContent
             case license' of
