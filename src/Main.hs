@@ -84,17 +84,38 @@ fetchPackageDescription pkgid = do
 main ∷ IO ()
 main = do
     args ← getArgs
-    sources ← case args of
-        [] → liftM lines getContents
-        _ → return args
-    forM_ sources $ \source → do
-        descr ← case source of
-            ('.':_) → readPackageDescription verbose source >>= fixLicense
-            ('/':_) → readPackageDescription verbose source >>= fixLicense
-            (simpleParse → Just pkgId) -> fetchPackageDescription pkgId
-            _ -> error $ "Specified source " ++ show source
-                ++ " neither starts with '.' or '/' (local file)"
-                ++ " nor a valid packageIdentifier (to fetch from hackage)"
-        let handler ∷ SomeException → IO ()
-            handler e = hPutStrLn stderr $ "# Failed fetch/generate for " ++ show source ++ ": " ++ show e
-        catch (evaluate (exRender descr) >>= putStrLn) handler
+    case args of
+        "-h":_ → putStr helpString
+        "--help":_ → putStr helpString
+        _ → do
+          sources ← case args of
+              [] → liftM lines getContents
+              _ → return args
+          forM_ sources $ \source → do
+              descr ← case source of
+                  ('.':_) → readPackageDescription verbose source >>= fixLicense
+                  ('/':_) → readPackageDescription verbose source >>= fixLicense
+                  (simpleParse → Just pkgId) -> fetchPackageDescription pkgId
+                  _ -> error $ "Specified source " ++ show source
+                      ++ " neither starts with '.' or '/' (local file)"
+                      ++ " nor a valid packageIdentifier (to fetch from hackage)"
+              let handler ∷ SomeException → IO ()
+                  handler e = hPutStrLn stderr $ "# Failed fetch/generate for " ++ show source ++ ": " ++ show e
+              catch (evaluate (exRender descr) >>= putStrLn) handler
+
+
+helpString :: String
+helpString =
+  "Generate package description from .cabal files in format of exheres-0 for\n" ++
+  "Exherbo Linux.\n" ++
+  "\n" ++
+  "See https://github.com/ony/exherbo-cabal\n" ++
+  "\n" ++
+  "Usage: exherbo-cabal <package from hackage[-version]...|local cabal file...>\n" ++
+  "\n" ++
+  "Examples:\n" ++
+  "  > exherbo-cabal mtl-2.2.1\n" ++
+  "  > exherbo-cabal mtl transformers\n" ++
+  "  > echo yesod-core | exherbo-cabal\n" ++
+  "  > exherbo-cabal ./exherbo-cabal.cabal\n" ++
+  "  > find /tmp/index -name \\*.cabal | exherbo-cabal\n"
