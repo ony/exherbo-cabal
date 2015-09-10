@@ -129,6 +129,7 @@ instance ExRender License where
     exDisp (LGPL (Just v)) = "LGPL-" <> disp v
     exDisp (Apache Nothing) = "Unspecified-Apache"
     exDisp (Apache (Just v)) = "Apache-" <> disp v
+    exDisp BSD2 = "BSD-2"
     exDisp BSD3 = "BSD-3"
     exDisp BSD4 = "BSD-4"
     exDisp MIT = "MIT"
