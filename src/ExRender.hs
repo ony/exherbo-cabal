@@ -132,6 +132,7 @@ instance ExRender License where
     exDisp BSD3 = "BSD-3"
     exDisp BSD4 = "BSD-4"
     exDisp MIT = "MIT"
+    exDisp PublicDomain = "public-domain"
     exDisp (UnknownLicense "BSD2") = "BSD-2"
     exDisp (UnknownLicense "MPL-2") = "MPL-2.0"
     exDisp (UnknownLicense x) | x `elem` exKnownLicenses = text x
