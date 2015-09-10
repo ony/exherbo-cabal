@@ -132,6 +132,7 @@ instance ExRender License where
     exDisp BSD2 = "BSD-2"
     exDisp BSD3 = "BSD-3"
     exDisp BSD4 = "BSD-4"
+    exDisp ISC = "ISC"
     exDisp MIT = "MIT"
     exDisp PublicDomain = "public-domain"
     exDisp (UnknownLicense "BSD2") = "BSD-2"
