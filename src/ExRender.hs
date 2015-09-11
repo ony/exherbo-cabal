@@ -34,10 +34,13 @@ exGHCVersion = Version [7, 10, 1] [] -- TODO: solve this hard-coded GHC version 
 exKnownLicenses ∷ [String]
 exKnownLicenses = ["CC0"]
 
+-- | Double-quoted string for bash
 dquoted ∷ String → String
 dquoted [] = []
 dquoted ('\\':xs) = "\\\\" ++ dquoted xs
 dquoted ('"':xs) = "\\\"" ++ dquoted xs
+dquoted ('`':xs) = "\\`" ++ dquoted xs
+dquoted ('$':xs) = "\\$" ++ dquoted xs
 dquoted (x:xs) = x : dquoted xs
 
 softWidth ∷ Int → [String] → [[String]]
@@ -95,6 +98,7 @@ instance ExRenderQ id => ExRenderQ (DocH mod id) where
         DocAName s → exDispQ s
         DocProperty s → exDispQ s
         DocExamples _ → empty -- XXX: examples are filtered out
+        _ -> error $ "Unsupported haddock node"
 
 instance ExRender LowerBound where
     exDisp (LowerBound v InclusiveBound) = ">=" <> disp v

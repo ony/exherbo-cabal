@@ -111,7 +111,11 @@ helpString =
   "\n" ++
   "See https://github.com/ony/exherbo-cabal\n" ++
   "\n" ++
-  "Usage: exherbo-cabal <package from hackage[-version]...|local cabal file...>\n" ++
+  "Usage: exherbo-cabal [ -h | --help | <ref-to-package> ... ]\n"++
+  "  -h | --help        Print this help and exit\n" ++
+  "  <ref-to-package> either a package name (mtl) at Hackage with optional\n" ++
+  "  version (mtl-2.2.1) or path to local cabal file (./exherbo-cabal.cabal)\n" ++
+  "  If no <ref-to-package> provided in args read them from standart input\n" ++
   "\n" ++
   "Examples:\n" ++
   "  > exherbo-cabal mtl-2.2.1\n" ++
