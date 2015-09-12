@@ -117,6 +117,12 @@ maybeExVersion = \case
     (LowerBound a InclusiveBound, UpperBound b InclusiveBound)
         | a == b → Just $ char '=' <> disp a
 
+    -- <x, <=x
+    (LowerBound (Version [0] []) InclusiveBound, ub) → Just $ exDisp ub
+
+    -- >=x, >x
+    (lb, NoUpperBound) → Just $ exDisp lb
+
     (LowerBound (Version [] _) _, _) → Nothing
     (_, UpperBound (Version [] _) _) → Nothing
     -- >=x.y && <x.y'
@@ -134,10 +140,8 @@ maybeExVersion = \case
     _ → Nothing
 
 instance ExRender VersionInterval where
-    exDisp (maybeExVersion → Just exVi) = exVi
     exDisp (LowerBound (Version [0] []) InclusiveBound, NoUpperBound) = empty
-    exDisp (LowerBound (Version [0] []) InclusiveBound, ub) = exDisp ub
-    exDisp (lb, NoUpperBound) = exDisp lb
+    exDisp (maybeExVersion → Just exVi) = exVi
     exDisp (lb, ub) = exDisp lb <> char '&' <> exDisp ub
 
 instance ExRender VersionRange where
