@@ -1,7 +1,7 @@
 -- Copyright © 2015 Mykola Orliuk <virkony@gmail.com>
 -- Distributed under the terms of the GNU General Public License v2
 
-{-# LANGUAGE UnicodeSyntax, ViewPatterns #-}
+{-# LANGUAGE UnicodeSyntax, ViewPatterns, LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
 
@@ -109,17 +109,41 @@ instance ExRender UpperBound where
     exDisp (UpperBound v ExclusiveBound) = "<" <> disp v
     exDisp x = error $ "Unsupported UpperBound: " ++ show x
 
+-- | Render some of VersionInterval's that can be represented with a single
+-- condition and thus suitable for using in disjunction list
+maybeExVersion ∷ VersionInterval → Maybe Doc
+maybeExVersion = \case
+    -- >=x && <=x
+    (LowerBound a InclusiveBound, UpperBound b InclusiveBound)
+        | a == b → Just $ char '=' <> disp a
+
+    (LowerBound (Version [] _) _, _) → Nothing
+    (_, UpperBound (Version [] _) _) → Nothing
+    -- >=x.y && <x.y'
+    (LowerBound v@(Version a []) InclusiveBound, UpperBound (Version b []) ExclusiveBound)
+        | init a == init b && succ (last a) == last b →
+            Just $ char '=' <> disp v <> char '*'
+
+    (LowerBound (Version [_] _) _, _) → Nothing
+    -- >=x.y.z && <x.y'
+    (LowerBound v@(Version a []) InclusiveBound, UpperBound (Version b []) ExclusiveBound)
+        | init a' == init b && succ (last a') == last b →
+                Just $ char '~' <> disp v
+            where a' = init a
+
+    _ → Nothing
+
 instance ExRender VersionInterval where
-    exDisp (LowerBound v  InclusiveBound,
-            UpperBound v' InclusiveBound) | v == v' = brackets ("=" <> disp v)
+    exDisp (maybeExVersion → Just exVi) = exVi
     exDisp (LowerBound (Version [0] []) InclusiveBound, NoUpperBound) = empty
-    exDisp (LowerBound (Version [0] []) InclusiveBound, ub) = brackets (exDisp ub)
-    exDisp (lb, NoUpperBound) = brackets (exDisp lb)
-    exDisp (lb, ub) = brackets (exDisp lb <> char '&' <> exDisp ub)
+    exDisp (LowerBound (Version [0] []) InclusiveBound, ub) = exDisp ub
+    exDisp (lb, NoUpperBound) = exDisp lb
+    exDisp (lb, ub) = exDisp lb <> char '&' <> exDisp ub
 
 instance ExRender VersionRange where
     exDisp vr = case asVersionIntervals vr of
-        [vi] → exDisp vi
+        [vi] → nbrackets $ exDisp vi
+        (mapM maybeExVersion → Just exVis) → nbrackets . hcat $ punctuate (char '|') exVis
         _ → error $ "Unsupported version range: " ++ display vr
 
 instance ExRender Dependency where

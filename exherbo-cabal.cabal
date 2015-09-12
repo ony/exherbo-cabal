@@ -62,8 +62,9 @@ executable exherbo-cabal
     FlexibleInstances,
     OverloadedStrings,
     UnicodeSyntax,
-    ViewPatterns
-  
+    ViewPatterns,
+    LambdaCase
+
   -- Other library packages from which modules are imported.
   build-depends:
     Cabal >=1.20 && <1.23,
