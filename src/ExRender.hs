@@ -263,7 +263,7 @@ instance ExRender GenericPackageDescription where
                                  ]
                 exParams = spaces $ exHasLib <+> exHasBin <+> exHasOptions
 
-        exSlot = if hasLib then empty else exField "SLOT" "0"
+        exSlot = if not hasBin && hasLib then empty else exField "SLOT" "0"
         exheres = vcat [
             "# Copyright 2015 Mykola Orliuk <virkony@gmail.com>",
             "# Distributed under the terms of the GNU General Public License v2",
