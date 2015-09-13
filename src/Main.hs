@@ -7,6 +7,7 @@ module Main where
 
 import Control.Applicative
 import Control.Monad
+import Control.Concurrent (threadDelay)
 import Control.Exception
 import Data.Maybe
 import Data.ByteString.Lazy.Char8 (unpack)
@@ -22,6 +23,7 @@ import Distribution.PackageDescription
 import Distribution.PackageDescription.Parse
 import Distribution.Verbosity
 import Network.HTTP.Client
+import Network.HTTP.Types
 
 import qualified Text.Regex.PCRE.Light.Char8 as R
 
@@ -30,7 +32,12 @@ import ExRender
 -- |Fetch content by provided URI
 simpleFetch ∷ String → IO String
 simpleFetch url = do
-    let settings = defaultManagerSettings
+    let settings = defaultManagerSettings { managerRetryableException = isTemporary
+                                          , managerResponseTimeout = Just 120000000
+                                          , managerWrapIOException = (threadDelay 1 >>)
+                                          }
+        isTemporary (fromException → Just (StatusCodeException e _ _)) = statusCode e `elem` [503]
+        isTemporary _ = False
     req ← parseUrl url
     withManager settings $ liftM (unpack . responseBody) . httpLbs req
 
@@ -53,13 +60,24 @@ hackageBaseUri ∷ String
 hackageBaseUri = "http://hackage.haskell.org/package/"
 
 fixLicense ∷ GenericPackageDescription → IO GenericPackageDescription
-fixLicense descr | license pkgDescr == OtherLicense = adjustLicense
+fixLicense descr | isNothing maybeLicensePath = return descr
+                 | license pkgDescr == OtherLicense = catch adjustLicense handler
                  | otherwise = return descr
     where
         pkgDescr = packageDescription descr
         packageUri = hackageBaseUri ++ display (package pkgDescr)
+
+        handler ∷ SomeException → IO GenericPackageDescription
+        handler e = do
+            hPutStrLn stderr $ "# No license fix for " ++ display (package pkgDescr) ++ ": " ++ show e
+            return descr
+
+        -- TODO: proper handling of multiple licenses
+        maybeLicensePath = case licenseFiles pkgDescr of
+                            [x] → Just x
+                            _ → Nothing
         adjustLicense = do
-            let licensePath = head $ licenseFiles pkgDescr -- TODO: proper handling of multiple licenses
+            let licensePath = fromJust $ maybeLicensePath
             licenseContent ← simpleFetch (packageUri ++ "/src/" ++ licensePath)
             license' ← guessLicense licenseContent
             case license' of
@@ -92,6 +110,7 @@ main = do
               [] → liftM lines getContents
               _ → return args
           forM_ sources $ \source → do
+              hPutStrLn stderr $ "# Processing " ++ show source
               descr ← case source of
                   ('.':_) → readPackageDescription verbose source >>= fixLicense
                   ('/':_) → readPackageDescription verbose source >>= fixLicense
