@@ -112,8 +112,10 @@ instance ExRender UpperBound where
     exDisp (UpperBound v ExclusiveBound) = "<" <> disp v
     exDisp x = error $ "Unsupported UpperBound: " ++ show x
 
--- | Render some of VersionInterval's that can be represented with a single
--- condition and thus suitable for using in disjunction list
+-- | Render some of VersionInterval's that can be represented with a single condition and thus suitable for using in disjunction list.
+--
+-- >>> map maybeExVersion $ asVersionIntervals (fromJust $ simpleParse ">=1.0 || ==0.1.*" :: VersionRange)
+-- [Just =0.1*,Just >=1.0]
 maybeExVersion ∷ VersionInterval → Maybe Doc
 maybeExVersion = \case
     -- >=x && <=x
@@ -142,6 +144,35 @@ maybeExVersion = \case
 
     _ → Nothing
 
+-- | Transform VersionInterval in a sequence of disjunctions
+--
+-- >>> map exVersions $ asVersionIntervals (fromJust $ simpleParse ">=1.0" :: VersionRange)
+-- [[>=1.0]]
+-- >>> map exVersions $ asVersionIntervals (fromJust $ simpleParse ">=1.0 && <1.3" :: VersionRange)
+-- [[=1.0*,=1.1*,=1.2*]]
+-- >>> map exVersions $ asVersionIntervals (fromJust $ simpleParse ">=1.0 && <=1.3" :: VersionRange)
+-- [[=1.0*,=1.1*,=1.2*,=1.3]]
+-- >>> map exVersions $ asVersionIntervals (fromJust $ simpleParse ">=1 && <=1.3" :: VersionRange)
+-- [[=1,=1.0*,=1.1*,=1.2*,=1.3]]
+-- >>> map exVersions $ asVersionIntervals (fromJust $ simpleParse ">=1 && <=1.0.3" :: VersionRange)
+-- [[=1,=1.0,=1.0.0*,=1.0.1*,=1.0.2*,=1.0.3]]
+exVersions ∷ VersionInterval → [Doc]
+exVersions = \case
+    (maybeExVersion → Just x) → [x]
+
+    -- ... && <=x.b
+    (lb, UpperBound v InclusiveBound) →
+        exVersions (lb, UpperBound v ExclusiveBound) ++ [char '=' <> disp v]
+
+    -- >=x.a && <x.b
+    (LowerBound va@(Version a _) InclusiveBound, ub@(UpperBound (Version b _) ExclusiveBound))
+        | init a == init b → do
+            c ← [init a ++ [i] | i ← [last a .. last b - 1]]
+            return $ char '=' <> disp (Version c []) <> char '*'
+        | length a < length b →
+            char '=' <> disp va : exVersions (LowerBound (Version (a ++ [0]) []) InclusiveBound, ub)
+    _ → []
+
 instance ExRender VersionInterval where
     exDisp (LowerBound (Version [0] []) InclusiveBound, NoUpperBound) = empty
     exDisp (maybeExVersion → Just exVi) = exVi
@@ -150,7 +181,7 @@ instance ExRender VersionInterval where
 instance ExRender VersionRange where
     exDisp vr = case asVersionIntervals vr of
         [vi] → nbrackets $ exDisp vi
-        (mapM maybeExVersion → Just exVis) → nbrackets . hcat $ punctuate (char '|') exVis
+        (concatMap exVersions → exVis) | not $ null exVis → nbrackets . hcat $ punctuate (char '|') exVis
         _ → error $ "Unsupported version range: " ++ display vr
 
 instance ExRender Dependency where
@@ -316,3 +347,16 @@ mergeSortedDeps (x:y:z) = case (x, y) of
 
 -- TODO: drop test deps that already in build
 -- TODO: use renderStyle instead of manual wrapping
+
+-- $setup
+--
+-- doctest examples:
+--
+-- >>> exRender (fromJust $ simpleParse ">=1.0 && <1.3" :: VersionRange)
+-- "[>=1.0&<1.3]"
+-- >>> exRender (fromJust $ simpleParse ">=1.1 && <2" :: VersionRange)
+-- "[~1.1]"
+-- >>> exRender (fromJust $ simpleParse "==1.* || ==3.*" :: VersionRange)
+-- "[=1*|=3*]"
+-- >>> exRender (fromJust $ simpleParse "==1.1.* || ==1.0.* || ==0.11.*" :: VersionRange)
+-- "[=0.11*|=1.0*|=1.1*]"
