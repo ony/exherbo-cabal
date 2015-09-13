@@ -28,8 +28,11 @@ import Documentation.Haddock.Types hiding (Version)
 exWrapWidth ∷ Int
 exWrapWidth = 80
 
+-- TODO: make GHC version configurable
 exGHCVersion ∷ Version
-exGHCVersion = Version [7, 10, 1] [] -- TODO: solve this hard-coded GHC version assumption
+exGHCVersion = case buildCompilerId of
+                (CompilerId GHC ver) → ver
+                x → error $ "Unsupported compiler " ++ show x
 
 exKnownLicenses ∷ [String]
 exKnownLicenses = ["CC0"]
