@@ -35,7 +35,7 @@ exGHCVersion = case buildCompilerId of
                 x → error $ "Unsupported compiler " ++ show x
 
 exKnownLicenses ∷ [String]
-exKnownLicenses = ["CC0"]
+exKnownLicenses = ["CC0", "AGPL-3"]
 
 -- | Double-quoted string for bash
 dquoted ∷ String → String
