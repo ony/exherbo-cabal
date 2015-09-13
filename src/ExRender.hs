@@ -276,8 +276,8 @@ collectDeps view descr = concatMap build (view descr) where
     build t = condTreeConstraints t ++ concatMap buildOptional (condTreeComponents t)
 
     buildOptional (eval → True, t, _) = build t
-    buildOptional (eval → False, _, Just t) = build t
-    buildOptional (eval → False, _, Nothing) = []
+    buildOptional (_, _, Just t) = build t
+    buildOptional (_, _, Nothing) = []
 
 collectLibDeps, collectBinDeps, collectTestDeps ∷ GenericPackageDescription → [Dependency]
 collectLibDeps = collectDeps (maybeToList . condLibrary)

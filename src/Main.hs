@@ -5,7 +5,6 @@
 
 module Main where
 
-import Control.Applicative
 import Control.Monad
 import Control.Concurrent (threadDelay)
 import Control.Exception
