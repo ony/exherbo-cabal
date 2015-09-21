@@ -301,7 +301,7 @@ collectDeps view descr = concatMap build (view descr) where
     eval (Lit f) = f
     eval (CNot e) = not (eval e)
     eval (COr a b) = eval a || eval b
-    eval (CAnd a b) = eval a || eval b
+    eval (CAnd a b) = eval a && eval b
     -- eval e = error $ "Unsupported expr " ++ show e
 
     build t = condTreeConstraints t ++ concatMap buildOptional (condTreeComponents t)
