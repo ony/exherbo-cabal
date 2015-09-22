@@ -1,6 +1,8 @@
 -- Copyright © 2015 Mykola Orliuk <virkony@gmail.com>
 -- Distributed under the terms of the GNU General Public License v2
 
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 {-# LANGUAGE UnicodeSyntax, ViewPatterns, LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -11,201 +13,27 @@ import Data.Maybe
 import Data.List
 import Data.Function
 import qualified Data.Map as M
-import Text.PrettyPrint
 
 import Control.Arrow ((&&&))
 
 import Distribution.Text
 import Distribution.Package
 import Distribution.Version
-import Distribution.License
 import Distribution.Compiler
 import Distribution.System
 import Distribution.PackageDescription
 import Documentation.Haddock.Parser
-import Documentation.Haddock.Types hiding (Version)
 
-exWrapWidth ∷ Int
-exWrapWidth = 80
+import ExRender.Base
+import ExRender.Haddock ()
+import ExRender.License ()
+import ExRender.Dependency ()
 
 -- TODO: make GHC version configurable
 exGHCVersion ∷ Version
 exGHCVersion = case buildCompilerId of
                 (CompilerId GHC ver) → ver
                 x → error $ "Unsupported compiler " ++ show x
-
-exKnownLicenses ∷ [String]
-exKnownLicenses = ["CC0", "AGPL-3"]
-
--- | Double-quoted string for bash
-dquoted ∷ String → String
-dquoted [] = []
-dquoted ('\\':xs) = "\\\\" ++ dquoted xs
-dquoted ('"':xs) = "\\\"" ++ dquoted xs
-dquoted ('`':xs) = "\\`" ++ dquoted xs
-dquoted ('$':xs) = "\\$" ++ dquoted xs
-dquoted (x:xs) = x : dquoted xs
-
-softWidth ∷ Int → [String] → [[String]]
-softWidth width = build 0 [] where
-    build _ ys [] = [reverse ys]
-    build 0 [] (w:ws) = build (length w) [w] ws
-    build n ys (w:ws) | n' > width = reverse ys : build 0 [] (w:ws)
-                      | otherwise = build n' (w : ys) ws
-        where
-            n' = length w + n
-
-reflow ∷ Int → String → Doc
-reflow width = vcat . map (text . unwords) . softWidth width . words
-
--- |Wrap doc with spaces around
-spaces ∷ Doc → Doc
-spaces doc | isEmpty doc = empty
-           | otherwise = space <> doc <> space
-
--- |Wrap with brackets non-empty doc
-nbrackets ∷ Doc → Doc
-nbrackets doc | isEmpty doc = empty
-              | otherwise = brackets doc
-
-class ExRender a where
-    -- |Renders 'a' into a 'Doc' representing some part of exheres
-    exDisp :: a → Doc
-
-class ExRenderQ a where
-    -- |Renders 'a' into a 'Doc' to be placed within double-quotes inside of exheres
-    exDispQ :: a → Doc
-
-instance ExRenderQ String where
-    -- TODO: exDispQ = sep . map text . words . dquoted
-    exDispQ = text . dquoted
-
-instance ExRender Identifier where exDisp (_, s, _) = text s
-instance ExRenderQ Identifier where exDispQ = exDisp
-
-instance ExRenderQ id => ExRenderQ (DocH mod id) where
-    exDispQ x = case x of
-        DocEmpty → empty
-        DocAppend a b → exDispQ a <> exDispQ b
-        DocString s → exDispQ s
-        DocParagraph a → exDispQ a
-        DocIdentifier s → exDispQ s
-        DocModule s → exDispQ s
-        DocWarning a → exDispQ a
-        DocEmphasis a → exDispQ a
-        DocMonospaced a → exDispQ a
-        DocBold a → exDispQ a
-        DocHyperlink (Hyperlink _ (Just s)) → exDispQ s
-        DocHyperlink (Hyperlink s Nothing) → exDispQ s
-        DocPic _ → empty -- XXX: no images in description
-        DocAName s → exDispQ s
-        DocProperty s → exDispQ s
-        DocExamples _ → empty -- XXX: examples are filtered out
-        _ -> error $ "Unsupported haddock node"
-
-instance ExRender LowerBound where
-    exDisp (LowerBound v InclusiveBound) = ">=" <> disp v
-    exDisp (LowerBound v ExclusiveBound) = ">" <> disp v
-
-instance ExRender UpperBound where
-    exDisp (UpperBound v InclusiveBound) = "<=" <> disp v
-    exDisp (UpperBound v ExclusiveBound) = "<" <> disp v
-    exDisp x = error $ "Unsupported UpperBound: " ++ show x
-
--- | Render some of VersionInterval's that can be represented with a single condition and thus suitable for using in disjunction list.
---
--- >>> map maybeExVersion $ asVersionIntervals (fromJust $ simpleParse ">=1.0 || ==0.1.*" :: VersionRange)
--- [Just =0.1*,Just >=1.0]
-maybeExVersion ∷ VersionInterval → Maybe Doc
-maybeExVersion = \case
-    -- >=x && <=x
-    (LowerBound a InclusiveBound, UpperBound b InclusiveBound)
-        | a == b → Just $ char '=' <> disp a
-
-    -- <x, <=x
-    (LowerBound (Version [0] []) InclusiveBound, ub) → Just $ exDisp ub
-
-    -- >=x, >x
-    (lb, NoUpperBound) → Just $ exDisp lb
-
-    (LowerBound (Version [] _) _, _) → Nothing
-    (_, UpperBound (Version [] _) _) → Nothing
-    -- >=x.y && <x.y'
-    (LowerBound v@(Version a []) InclusiveBound, UpperBound (Version b []) ExclusiveBound)
-        | init a == init b && succ (last a) == last b →
-            Just $ char '=' <> disp v <> char '*'
-
-    (LowerBound (Version [_] _) _, _) → Nothing
-    -- >=x.y.z && <x.y'
-    (LowerBound v@(Version a []) InclusiveBound, UpperBound (Version b []) ExclusiveBound)
-        | init a' == init b && succ (last a') == last b →
-                Just $ char '~' <> disp v
-            where a' = init a
-
-    _ → Nothing
-
--- | Transform VersionInterval in a sequence of disjunctions
---
--- >>> map exVersions $ asVersionIntervals (fromJust $ simpleParse ">=1.0" :: VersionRange)
--- [[>=1.0]]
--- >>> map exVersions $ asVersionIntervals (fromJust $ simpleParse ">=1.0 && <1.3" :: VersionRange)
--- [[=1.0*,=1.1*,=1.2*]]
--- >>> map exVersions $ asVersionIntervals (fromJust $ simpleParse ">=1.0 && <=1.3" :: VersionRange)
--- [[=1.0*,=1.1*,=1.2*,=1.3]]
--- >>> map exVersions $ asVersionIntervals (fromJust $ simpleParse ">=1 && <=1.3" :: VersionRange)
--- [[=1,=1.0*,=1.1*,=1.2*,=1.3]]
--- >>> map exVersions $ asVersionIntervals (fromJust $ simpleParse ">=1 && <=1.0.3" :: VersionRange)
--- [[=1,=1.0,=1.0.0*,=1.0.1*,=1.0.2*,=1.0.3]]
-exVersions ∷ VersionInterval → [Doc]
-exVersions = \case
-    (maybeExVersion → Just x) → [x]
-
-    -- ... && <=x.b
-    (lb, UpperBound v InclusiveBound) →
-        exVersions (lb, UpperBound v ExclusiveBound) ++ [char '=' <> disp v]
-
-    -- >=x.a && <x.b
-    (LowerBound va@(Version a _) InclusiveBound, ub@(UpperBound (Version b _) ExclusiveBound))
-        | init a == init b → do
-            c ← [init a ++ [i] | i ← [last a .. last b - 1]]
-            return $ char '=' <> disp (Version c []) <> char '*'
-        | length a < length b →
-            char '=' <> disp va : exVersions (LowerBound (Version (a ++ [0]) []) InclusiveBound, ub)
-    _ → []
-
-instance ExRender VersionInterval where
-    exDisp (LowerBound (Version [0] []) InclusiveBound, NoUpperBound) = empty
-    exDisp (maybeExVersion → Just exVi) = exVi
-    exDisp (lb, ub) = exDisp lb <> char '&' <> exDisp ub
-
-instance ExRender VersionRange where
-    exDisp vr = case asVersionIntervals vr of
-        [vi] → nbrackets $ exDisp vi
-        (concatMap exVersions → exVis) | not $ null exVis → nbrackets . hcat $ punctuate (char '|') exVis
-        _ → error $ "Unsupported version range: " ++ display vr
-
-instance ExRender Dependency where
-    exDisp (Dependency n vr) = "dev-haskell/" <> disp n <> exDisp vr
-
-instance ExRender License where
-    exDisp (GPL Nothing) = "Unspecified-GPL"
-    exDisp (GPL (Just v)) = "GPL-" <> disp v
-    exDisp (AGPL (Just v)) = "AGPL-" <> disp v
-    exDisp (LGPL Nothing) = "Unspecified-LGPL"
-    exDisp (LGPL (Just v)) = "LGPL-" <> disp v
-    exDisp (Apache Nothing) = "Unspecified-Apache"
-    exDisp (Apache (Just v)) = "Apache-" <> disp v
-    exDisp (MPL v) = "MPL-" <> disp v
-    exDisp BSD2 = "BSD-2"
-    exDisp BSD3 = "BSD-3"
-    exDisp BSD4 = "BSD-4"
-    exDisp ISC = "ISC"
-    exDisp MIT = "MIT"
-    exDisp PublicDomain = "public-domain"
-    exDisp (UnknownLicense "BSD2") = "BSD-2"
-    exDisp (UnknownLicense "MPL-2") = "MPL-2.0"
-    exDisp (UnknownLicense x) | x `elem` exKnownLicenses = text x
-    exDisp x = error $ "Unsupported license: " ++ display x
 
 instance ExRender GenericPackageDescription where
     exDisp descr = exheres where
@@ -315,22 +143,9 @@ collectLibDeps = collectDeps (maybeToList . condLibrary)
 collectBinDeps = collectDeps (map snd . condExecutables)
 collectTestDeps = collectDeps (map snd . condTestSuites)
 
--- |Render 'a' to a final part of Exheres
+-- | Render 'a' to a final part of Exheres
 exRender ∷ ExRender a ⇒ a → String
 exRender = render . exDisp
-
--- |Render a multi-line meta-field of Exheres if non-empty value
-exFieldDoc ∷ String → Doc → Doc
-exFieldDoc name value | isEmpty value = empty
-                      | otherwise = vcat [text name <> "=\"", value, char '"']
-
--- |Render a single-line with potential wrap meta-field of Exheres if non-empty value
-exField ∷ String → String → Doc
-exField _ "" = empty
-exField name x | length singleLine < exWrapWidth = text singleLine
-               | otherwise = exFieldDoc name (reflow exWrapWidth (dquoted x))
-    where
-        singleLine = name ++ "=\"" ++ dquoted x ++ "\""
 
 -- |Sort dependencies according to Exherbo order
 sortDeps ∷ [Dependency] → [Dependency]
@@ -347,16 +162,3 @@ mergeSortedDeps (x:y:z) = case (x, y) of
 
 -- TODO: drop test deps that already in build
 -- TODO: use renderStyle instead of manual wrapping
-
--- $setup
---
--- doctest examples:
---
--- >>> exRender (fromJust $ simpleParse ">=1.0 && <1.3" :: VersionRange)
--- "[>=1.0&<1.3]"
--- >>> exRender (fromJust $ simpleParse ">=1.1 && <2" :: VersionRange)
--- "[~1.1]"
--- >>> exRender (fromJust $ simpleParse "==1.* || ==3.*" :: VersionRange)
--- "[=1*|=3*]"
--- >>> exRender (fromJust $ simpleParse "==1.1.* || ==1.0.* || ==0.11.*" :: VersionRange)
--- "[=0.11*|=1.0*|=1.1*]"

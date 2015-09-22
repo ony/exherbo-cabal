@@ -10,7 +10,7 @@ name:                exherbo-cabal
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             0.1.1.0
+version:             0.1.1.1
 
 -- A short (one-line) description of the package.
 synopsis:            Exheres generator for cabal packages
@@ -53,6 +53,12 @@ source-repository head
 library
   Exposed-modules:
     ExRender
+
+  Other-modules:
+    ExRender.Base
+    ExRender.Dependency
+    ExRender.Haddock
+    ExRender.License
 
   build-depends:
     Cabal >=1.20 && <1.23,
