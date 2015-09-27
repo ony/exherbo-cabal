@@ -9,6 +9,7 @@ import Control.Monad
 import Control.Concurrent (threadDelay)
 import Control.Exception
 import Data.Maybe
+import Data.Default
 import Data.ByteString.Lazy.Char8 (unpack)
 
 import System.Environment
@@ -119,7 +120,7 @@ main = do
                       ++ " nor a valid packageIdentifier (to fetch from hackage)"
               let handler ∷ SomeException → IO ()
                   handler e = hPutStrLn stderr $ "# Failed fetch/generate for " ++ show source ++ ": " ++ show e
-              catch (evaluate (exRender descr) >>= putStrLn) handler
+              catch (evaluate (exRenderPkg def $ descr) >>= putStrLn) handler
 
 
 helpString :: String

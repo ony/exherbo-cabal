@@ -3,15 +3,17 @@
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UnicodeSyntax, ViewPatterns, LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module ExRender (exDisp, exDispQ, exRender) where
+module ExRender (ExCabalEnv(..), ExRenderPackage, exDisp, exDispQ, exRenderPkg) where
 
 import Data.Maybe
 import Data.List
 import Data.Function
+import Data.Default
 import qualified Data.Map as M
 
 import Control.Arrow ((&&&))
@@ -29,14 +31,35 @@ import ExRender.Haddock ()
 import ExRender.License ()
 import ExRender.Dependency ()
 
--- TODO: make GHC version configurable
-exGHCVersion ∷ Version
-exGHCVersion = case buildCompilerId of
-                (CompilerId GHC ver) → ver
-                x → error $ "Unsupported compiler " ++ show x
+data ExCabalEnv = ExCabalEnv
+    { exGHCVersion ∷ Version
+    , exCopyright ∷ Doc
+    , exBugsTo ∷ String
+    }
+    deriving (Show)
+
+instance Default ExCabalEnv where
+    def = ExCabalEnv
+        { exGHCVersion = case buildCompilerId of
+            (CompilerId GHC ver) → ver
+            x → error $ "Unsupported compiler " ++ show x
+        , exCopyright = vcat
+            [ "# Copyright 2015 Mykola Orliuk <virkony@gmail.com>"
+            , "# Distributed under the terms of the GNU General Public License v2"
+            ]
+        , exBugsTo = "virkony@gmail.com"
+        }
+
+class ExRenderPackage a where
+    type ExPackageEnv a
+    exDispPkg ∷ ExPackageEnv a → a → Doc
 
 instance ExRender GenericPackageDescription where
-    exDisp descr = exheres where
+    exDisp = exDispPkg def
+
+instance ExRenderPackage GenericPackageDescription where
+    type ExPackageEnv GenericPackageDescription = ExCabalEnv
+    exDispPkg env descr = exheres where
         nameSelf = pkgName . package $ packageDescription descr
         ignoredPkgIds = map (fromJust . simpleParse) ["base", "ghc", "ghc-prim"]
 
@@ -55,17 +78,17 @@ instance ExRender GenericPackageDescription where
         exLibDeps | null libDeps = empty
                   | otherwise = exDepFn "haskell_lib_dependencies" libDeps
             where
-                libDeps = filter (not . ignoredDep) (collectLibDeps descr)
+                libDeps = filter (not . ignoredDep) (collectLibDeps env descr)
 
         exBinDeps | null binDeps = empty
                   | otherwise = exDepFn "haskell_bin_dependencies" binDeps
             where
-                binDeps = filter (not . ignoredBinDep) (collectBinDeps descr)
+                binDeps = filter (not . ignoredBinDep) (collectBinDeps env descr)
 
         exTestDeps = case condTestSuites descr of
             [] → empty
             _ → exDepFn "haskell_test_dependencies" testDeps where
-                testDeps = filter (not . ignoredTestDep) (collectTestDeps descr)
+                testDeps = filter (not . ignoredTestDep) (collectTestDeps env descr)
 
         exDependencies = vcat [
             "DEPENDENCIES=\"",
@@ -93,8 +116,7 @@ instance ExRender GenericPackageDescription where
 
         exSlot = if not hasBin && hasLib then empty else exField "SLOT" "0"
         exheres = vcat [
-            "# Copyright 2015 Mykola Orliuk <virkony@gmail.com>",
-            "# Distributed under the terms of the GNU General Public License v2",
+            exCopyright env,
             "# Generated for " <> disp (package pkgDescr),
             "",
             exRequire,
@@ -103,28 +125,28 @@ instance ExRender GenericPackageDescription where
             exFieldDoc "DESCRIPTION" (exDispQ . toRegular . parseString $ description pkgDescr),
             exField "HOMEPAGE" (homepage pkgDescr),
             "",
-            exField "LICENCES" (exRender $ license pkgDescr),
+            exField "LICENCES" (render . exDisp $ license pkgDescr),
             exSlot,
             exField "PLATFORMS" "~amd64",
             "",
             exDependencies,
             "",
-            exField "BUGS_TO" "virkony@gmail.com",
+            exField "BUGS_TO" (exBugsTo env),
             ""
             ]
 
 -- |Collect dependencies from all 'CondTree' nodes of
 -- 'GenericPackageDescription' using provided view
-collectDeps ∷ (GenericPackageDescription → [CondTree ConfVar [Dependency] a])
+collectDeps ∷ ExCabalEnv → (GenericPackageDescription → [CondTree ConfVar [Dependency] a])
               → GenericPackageDescription → [Dependency]
-collectDeps view descr = concatMap build (view descr) where
+collectDeps env view descr = concatMap build (view descr) where
     flags = M.fromList . map (flagName &&& id) $ genPackageFlags descr
     eval (Var (Flag k)) = flagDefault . fromJust $ M.lookup k flags
     eval (Var (OS Linux)) = True -- TODO: solve this hard-coded OS assumption
     eval (Var (OS _)) = False
     eval (Var (Arch X86_64)) = True -- TODO: support other platforms besides amd64
     eval (Var (Arch _)) = False
-    eval (Var (Impl GHC vr)) = exGHCVersion `withinRange` vr
+    eval (Var (Impl GHC vr)) = exGHCVersion env `withinRange` vr
     eval (Var (Impl _ _)) = False -- XXX: no support for non-GHC compilers
     eval (Lit f) = f
     eval (CNot e) = not (eval e)
@@ -138,14 +160,14 @@ collectDeps view descr = concatMap build (view descr) where
     buildOptional (_, _, Just t) = build t
     buildOptional (_, _, Nothing) = []
 
-collectLibDeps, collectBinDeps, collectTestDeps ∷ GenericPackageDescription → [Dependency]
-collectLibDeps = collectDeps (maybeToList . condLibrary)
-collectBinDeps = collectDeps (map snd . condExecutables)
-collectTestDeps = collectDeps (map snd . condTestSuites)
+collectLibDeps, collectBinDeps, collectTestDeps ∷ ExCabalEnv → GenericPackageDescription → [Dependency]
+collectLibDeps env = collectDeps env (maybeToList . condLibrary)
+collectBinDeps env = collectDeps env (map snd . condExecutables)
+collectTestDeps env = collectDeps env (map snd . condTestSuites)
 
--- | Render 'a' to a final part of Exheres
-exRender ∷ ExRender a ⇒ a → String
-exRender = render . exDisp
+-- | Render 'a' to a final Exheres
+exRenderPkg ∷ ExRenderPackage a ⇒ ExPackageEnv a → a → String
+exRenderPkg env = render . exDispPkg env
 
 -- |Sort dependencies according to Exherbo order
 sortDeps ∷ [Dependency] → [Dependency]
