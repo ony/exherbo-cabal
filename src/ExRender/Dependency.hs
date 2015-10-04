@@ -51,7 +51,7 @@ maybeExVersion = \case
     -- >=x.y.z && <x.y'
     (LowerBound v@(Version a []) InclusiveBound, UpperBound (Version b []) ExclusiveBound)
         | init a' == init b && succ (last a') == last b →
-                Just $ char '~' <> disp v
+                Just $ text "~>" <> disp v
             where a' = init a
 
     _ → Nothing
@@ -108,7 +108,7 @@ instance ExRender Dependency where
 -- >>> exDisp (fromJust $ simpleParse ">=1.0 && <1.3" :: VersionRange)
 -- [>=1.0&<1.3]
 -- >>> exDisp (fromJust $ simpleParse ">=1.1 && <2" :: VersionRange)
--- [~1.1]
+-- [~>1.1]
 -- >>> exDisp (fromJust $ simpleParse "==1.* || ==3.*" :: VersionRange)
 -- [=1*|=3*]
 -- >>> exDisp (fromJust $ simpleParse "==1.1.* || ==1.0.* || ==0.11.*" :: VersionRange)
