@@ -99,12 +99,14 @@ executable exherbo-cabal
   -- Other library packages from which modules are imported.
   build-depends:
     Cabal >=1.20 && <1.23,
+    ansi-wl-pprint >=0.6 && <0.7,
     base >=4.7 && <4.9,
     bytestring >=0.10 && <0.11,
     data-default >=0.2 && <1,
-    exherbo-cabal >=0.1.1 && <0.2,
+    exherbo-cabal >=0.2 && <0.3,
     http-client >=0.4 && <0.5,
     http-types <1,
+    optparse-applicative >=0.12 && <0.13,
     pcre-light <0.5
   
   -- Base language which the package is written in.

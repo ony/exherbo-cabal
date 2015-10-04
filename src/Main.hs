@@ -1,7 +1,9 @@
 -- Copyright © 2015 Mykola Orliuk <virkony@gmail.com>
 -- Distributed under the terms of the GNU General Public License v2
 
-{-# LANGUAGE ViewPatterns, UnicodeSyntax #-}
+{-# LANGUAGE ViewPatterns, LambdaCase, UnicodeSyntax #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Main where
 
@@ -12,7 +14,8 @@ import Data.Maybe
 import Data.Default
 import Data.ByteString.Lazy.Char8 (unpack)
 
-import System.Environment
+import Options.Applicative
+
 import System.IO
 
 import Distribution.Text
@@ -25,9 +28,18 @@ import Distribution.Verbosity
 import Network.HTTP.Client
 import Network.HTTP.Types
 
+import Text.PrettyPrint.ANSI.Leijen hiding ((<>), (<$>), empty, text)
 import qualified Text.Regex.PCRE.Light.Char8 as R
 
 import ExRender
+
+maybeReader ∷ (String → Maybe a) → ReadM a
+maybeReader f = eitherReader $ \case
+    (f → Just x) → return x
+    arg → Left $ "cannot parse value `" ++ arg ++ "'"
+
+textAuto ∷ Text a ⇒ ReadM a
+textAuto = maybeReader simpleParse
 
 -- |Fetch content by provided URI
 simpleFetch ∷ String → IO String
@@ -99,46 +111,86 @@ fetchPackageDescription pkgid = do
     ParseOk _ descr ← liftM parsePackageDescription $ simpleFetch url
     fixLicense descr
 
+data TargetCabal = TargetCabalFile FilePath
+                 | TargetPackage PackageIdentifier
+                 | TargetInvalid String
+    deriving (Show)
+
+targetParse ∷ String → Either String TargetCabal
+targetParse arg = case arg of
+    ('.':_) → return $ TargetCabalFile arg
+    ('/':_) → return $ TargetCabalFile arg
+    (simpleParse → Just pkgId) → return $ TargetPackage pkgId
+    _ → Left $ "Specified target " ++ show arg
+        ++ " neither starts with '.' or '/' (local cabal file)"
+        ++ " nor a valid packageIdentifier (to fetch from hackage)"
+
+targetArguments ∷ Parser [TargetCabal]
+targetArguments = some (argument targetReader (metavar "TARGETS..."))
+    where targetReader = eitherReader targetParse
+
+data ExCabal =
+    ExCabal
+        { ghcVersion ∷ Version
+        , targets ∷ Maybe [TargetCabal]
+        }
+    deriving (Show)
+
+exCabalParser ∷ Parser ExCabal
+exCabalParser = ExCabal
+    <$> option textAuto
+        ( long "ghc" <> short 'V'
+        <> metavar "VERSION"
+        <> help "Target VERSION of GHC"
+        <> showDefaultWith display
+        <> value (exGHCVersion def)
+        )
+    <*> optional targetArguments
+
 main ∷ IO ()
 main = do
-    args ← getArgs
-    case args of
-        "-h":_ → putStr helpString
-        "--help":_ → putStr helpString
-        _ → do
-          sources ← case args of
-              [] → liftM lines getContents
-              _ → return args
-          forM_ sources $ \source → do
-              hPutStrLn stderr $ "# Processing " ++ show source
-              descr ← case source of
-                  ('.':_) → readPackageDescription verbose source >>= fixLicense
-                  ('/':_) → readPackageDescription verbose source >>= fixLicense
-                  (simpleParse → Just pkgId) -> fetchPackageDescription pkgId
-                  _ -> error $ "Specified source " ++ show source
-                      ++ " neither starts with '.' or '/' (local file)"
-                      ++ " nor a valid packageIdentifier (to fetch from hackage)"
-              let handler ∷ SomeException → IO ()
-                  handler e = hPutStrLn stderr $ "# Failed fetch/generate for " ++ show source ++ ": " ++ show e
-              catch (evaluate (exRenderPkg def $ descr) >>= putStrLn) handler
+    let opts = info (helper <*> exCabalParser)
+            ( fullDesc
+            <> headerDoc (Just helpHeader)
+            <> progDescDoc (Just helpDesc)
+            <> footerDoc (Just helpFooter)
+            )
+    params ← execParser opts
+    let env = def { exGHCVersion = ghcVersion params }
+    targets' ← case targets params of
+        Just xs → return xs
+        Nothing →
+            liftM (map (either TargetInvalid id . targetParse) . lines) getContents
+
+    let generate source getDescr = do
+            let handler ∷ SomeException → IO ()
+                handler e = hPutStrLn stderr $ "# Failed fetch/generate for " ++ show source ++ ": " ++ show e
+            hPutStrLn stderr $ "# Processing " ++ show source
+            catch (liftM (exRenderPkg env) getDescr >>= putStrLn) handler
+
+    forM_ targets' $ \case
+        TargetInvalid err → hPutStrLn stderr $ "# Invalid target: " ++ err
+        TargetCabalFile filepath → generate filepath (readPackageDescription verbose filepath >>= fixLicense)
+        TargetPackage pkgId → generate (display pkgId) (fetchPackageDescription pkgId)
 
 
-helpString :: String
-helpString =
-  "Generate package description from .cabal files in format of exheres-0 for\n" ++
-  "Exherbo Linux.\n" ++
-  "\n" ++
-  "See https://github.com/ony/exherbo-cabal\n" ++
-  "\n" ++
-  "Usage: exherbo-cabal [ -h | --help | <ref-to-package> ... ]\n"++
-  "  -h | --help        Print this help and exit\n" ++
-  "  <ref-to-package> either a package name (mtl) at Hackage with optional\n" ++
-  "  version (mtl-2.2.1) or path to local cabal file (./exherbo-cabal.cabal)\n" ++
-  "  If no <ref-to-package> provided in args read them from standart input\n" ++
-  "\n" ++
-  "Examples:\n" ++
-  "  > exherbo-cabal mtl-2.2.1\n" ++
-  "  > exherbo-cabal mtl transformers\n" ++
-  "  > echo yesod-core | exherbo-cabal\n" ++
-  "  > exherbo-cabal ./exherbo-cabal.cabal\n" ++
-  "  > find /tmp/index -name \\*.cabal | exherbo-cabal\n"
+helpHeader ∷ Doc
+helpHeader = fillSep [
+  "Generate package description", "from .cabal files",
+  "in format of exheres-0", "for Exherbo Linux"]
+
+helpDesc ∷ Doc
+helpDesc = fillSep [
+  "Each of TARGETS specify either", "a package name (mtl) at Hackage",
+  "with optional", "version (mtl-2.2.1)",
+  "or path to local cabal file (./exherbo-cabal.cabal).",
+  "If no TARGETS provided in args read them from standart input."]
+
+helpFooter ∷ Doc
+helpFooter = vcat ["Examples:", indent 2 $ vcat [
+  "> exherbo-cabal mtl-2.2.1",
+  "> exherbo-cabal mtl transformers",
+  "> echo yesod-core | exherbo-cabal",
+  "> exherbo-cabal ./exherbo-cabal.cabal",
+  "> find /tmp/index -name \\*.cabal | exherbo-cabal"
+  ], mempty, "See https://github.com/ony/exherbo-cabal"]
