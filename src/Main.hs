@@ -10,6 +10,7 @@ module Main where
 import Control.Monad
 import Control.Concurrent (threadDelay)
 import Control.Exception
+import Control.DeepSeq
 import Data.Maybe
 import Data.Default
 import Data.ByteString.Lazy.Char8 (unpack)
@@ -17,6 +18,8 @@ import Data.ByteString.Lazy.Char8 (unpack)
 import Options.Applicative
 
 import System.IO
+import System.FilePath
+import System.Directory
 
 import Distribution.Text
 import Distribution.Package
@@ -28,7 +31,7 @@ import Distribution.Verbosity
 import Network.HTTP.Client
 import Network.HTTP.Types
 
-import Text.PrettyPrint.ANSI.Leijen hiding ((<>), (<$>), empty, text)
+import Text.PrettyPrint.ANSI.Leijen hiding ((<>), (<$>), (</>), empty, text)
 import qualified Text.Regex.PCRE.Light.Char8 as R
 
 import ExRender
@@ -132,6 +135,7 @@ targetArguments = some (argument targetReader (metavar "TARGETS..."))
 data ExCabal =
     ExCabal
         { ghcVersion ∷ Version
+        , destFolder ∷ Maybe FilePath
         , targets ∷ Maybe [TargetCabal]
         }
     deriving (Show)
@@ -145,6 +149,12 @@ exCabalParser = ExCabal
         <> showDefaultWith display
         <> value (exGHCVersion def)
         )
+    <*> optional (strOption
+        ( long "dest-dir" <> short 'd'
+        <> metavar "DIRECTORY"
+        <> help ("Generate output into exheres-0 files under DIRECTORY " ++
+                 "(usually repo/packages) instead of standart output.")
+        ))
     <*> optional targetArguments
 
 main ∷ IO ()
@@ -162,11 +172,26 @@ main = do
         Nothing →
             liftM (map (either TargetInvalid id . targetParse) . lines) getContents
 
+    let output = case destFolder params of
+            Nothing → const putStrLn -- output to stdout
+            Just dirpath → \descr exheres → do
+                let pkgId = package $ packageDescription descr
+                    pnv = display pkgId
+                    pn = display (pkgName pkgId)
+                    folder = dirpath </> "dev-haskell" </> pn
+                    filepath = folder </> (pnv ++ ".exheres-0")
+                createDirectoryIfMissing True folder
+                writeFile filepath exheres
+
     let generate source getDescr = do
             let handler ∷ SomeException → IO ()
                 handler e = hPutStrLn stderr $ "# Failed fetch/generate for " ++ show source ++ ": " ++ show e
+                body = do
+                    descr ← getDescr
+                    let exheres = exRenderPkg env descr
+                    exheres `deepseq` output descr exheres
             hPutStrLn stderr $ "# Processing " ++ show source
-            catch (liftM (exRenderPkg env) getDescr >>= putStrLn) handler
+            catch body handler
 
     forM_ targets' $ \case
         TargetInvalid err → hPutStrLn stderr $ "# Invalid target: " ++ err
@@ -192,5 +217,6 @@ helpFooter = vcat ["Examples:", indent 2 $ vcat [
   "> exherbo-cabal mtl transformers",
   "> echo yesod-core | exherbo-cabal",
   "> exherbo-cabal ./exherbo-cabal.cabal",
-  "> find /tmp/index -name \\*.cabal | exherbo-cabal"
+  "> find /tmp/index -name \\*.cabal | exherbo-cabal",
+  "> find /tmp/index -name \\*.cabal | exherbo-cabal --dest-dir hackage-repo/packages"
   ], mempty, "See https://github.com/ony/exherbo-cabal"]
