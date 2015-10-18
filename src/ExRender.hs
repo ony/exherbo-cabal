@@ -167,7 +167,7 @@ collectTestDeps env = collectDeps env (map snd . condTestSuites)
 
 -- | Render 'a' to a final Exheres
 exRenderPkg ∷ ExRenderPackage a ⇒ ExPackageEnv a → a → String
-exRenderPkg env = render . exDispPkg env
+exRenderPkg env = (++ "\n") . render . exDispPkg env
 
 -- |Sort dependencies according to Exherbo order
 sortDeps ∷ [Dependency] → [Dependency]

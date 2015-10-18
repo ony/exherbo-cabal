@@ -173,7 +173,7 @@ main = do
             liftM (map (either TargetInvalid id . targetParse) . lines) getContents
 
     let output = case destFolder params of
-            Nothing → const putStrLn -- output to stdout
+            Nothing → const putStr -- output to stdout
             Just dirpath → \descr exheres → do
                 let pkgId = package $ packageDescription descr
                     pnv = display pkgId

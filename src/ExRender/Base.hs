@@ -11,9 +11,9 @@ module ExRender.Base
 
 import Text.PrettyPrint
 
--- | Wrap width soft limitt
+-- | Wrap width soft limit
 exWrapWidth ∷ Int
-exWrapWidth = 80
+exWrapWidth = 100
 
 class ExRender a where
     -- | Renders 'a' into a 'Doc' representing some part of exheres
@@ -64,7 +64,7 @@ exFieldDoc name value | isEmpty value = empty
 -- |Render a single-line with potential wrap meta-field of Exheres if non-empty value
 exField ∷ String → String → Doc
 exField _ "" = empty
-exField name x | length singleLine < exWrapWidth = text singleLine
+exField name x | length singleLine <= exWrapWidth = text singleLine
                | otherwise = exFieldDoc name (reflow exWrapWidth (dquoted x))
     where
         singleLine = name ++ "=\"" ++ dquoted x ++ "\""
