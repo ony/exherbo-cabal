@@ -54,7 +54,8 @@ simpleFetch url = do
         isTemporary (fromException → Just (StatusCodeException e _ _)) = statusCode e `elem` [503]
         isTemporary _ = False
     req ← parseUrl url
-    withManager settings $ liftM (unpack . responseBody) . httpLbs req
+    manager ← newManager settings
+    liftM (unpack . responseBody) $ httpLbs req manager
 
 licenseHints ∷ [(R.Regex, License)]
 licenseHints = [
