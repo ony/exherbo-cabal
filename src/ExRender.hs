@@ -14,9 +14,6 @@ import Data.Maybe
 import Data.List
 import Data.Function
 import Data.Default
-import qualified Data.Map as M
-
-import Control.Arrow ((&&&))
 
 import Distribution.Text
 import Distribution.Package
@@ -25,6 +22,8 @@ import Distribution.Compiler
 import Distribution.System
 import Distribution.PackageDescription
 import Documentation.Haddock.Parser
+
+import CabalLenses
 
 import ExRender.Base
 import ExRender.Haddock ()
@@ -115,6 +114,10 @@ instance ExRenderPackage GenericPackageDescription where
                 exParams = spaces $ exHasLib <+> exHasBin <+> exHasOptions
 
         exSlot = if not hasBin && hasLib then empty else exField "SLOT" "0"
+        exPlatforms = case arch $ fromDefaults descr of
+            I386 → "~x86"
+            X86_64 → "~amd64"
+            x → error $ "Unsupported architecture " ++ show x
         exheres = vcat [
             exCopyright env,
             "# Generated for " <> disp (package pkgDescr),
@@ -127,7 +130,7 @@ instance ExRenderPackage GenericPackageDescription where
             "",
             exField "LICENCES" (render . exDisp $ license pkgDescr),
             exSlot,
-            exField "PLATFORMS" "~amd64",
+            exField "PLATFORMS" exPlatforms,
             "",
             exDependencies,
             "",
@@ -140,23 +143,14 @@ instance ExRenderPackage GenericPackageDescription where
 collectDeps ∷ ExCabalEnv → (GenericPackageDescription → [CondTree ConfVar [Dependency] a])
               → GenericPackageDescription → [Dependency]
 collectDeps env view descr = concatMap build (view descr) where
-    flags = M.fromList . map (flagName &&& id) $ genPackageFlags descr
-    eval (Var (Flag k)) = flagDefault . fromJust $ M.lookup k flags
-    eval (Var (OS Linux)) = True -- TODO: solve this hard-coded OS assumption
-    eval (Var (OS _)) = False
-    eval (Var (Arch X86_64)) = True -- TODO: support other platforms besides amd64
-    eval (Var (Arch _)) = False
-    eval (Var (Impl GHC vr)) = exGHCVersion env `withinRange` vr
-    eval (Var (Impl _ _)) = False -- XXX: no support for non-GHC compilers
-    eval (Lit f) = f
-    eval (CNot e) = not (eval e)
-    eval (COr a b) = eval a || eval b
-    eval (CAnd a b) = eval a && eval b
-    -- eval e = error $ "Unsupported expr " ++ show e
+    condVars = (fromDefaults descr) {
+        compilerFlavor = GHC,
+        compilerVersion = Just $ exGHCVersion env
+        }
 
     build t = condTreeConstraints t ++ concatMap buildOptional (condTreeComponents t)
 
-    buildOptional (eval → True, t, _) = build t
+    buildOptional (eval condVars → True, t, _) = build t
     buildOptional (_, _, Just t) = build t
     buildOptional (_, _, Nothing) = []
 
