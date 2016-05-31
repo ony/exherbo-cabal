@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/ony/exherbo-cabal.svg?branch=master)](https://travis-ci.org/ony/exherbo-cabal)
+
 Description
 ===========
 Generate package description from .cabal files in format of exheres-0 for
