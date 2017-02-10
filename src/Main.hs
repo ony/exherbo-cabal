@@ -48,12 +48,12 @@ textAuto = maybeReader simpleParse
 simpleFetch ∷ String → IO String
 simpleFetch url = do
     let settings = defaultManagerSettings { managerRetryableException = isTemporary
-                                          , managerResponseTimeout = Just 120000000
-                                          , managerWrapIOException = (threadDelay 1 >>)
+                                          , managerResponseTimeout = responseTimeoutMicro 120000000
+                                          , managerWrapException = const (threadDelay 1 >>)
                                           }
-        isTemporary (fromException → Just (StatusCodeException e _ _)) = statusCode e `elem` [503]
+        isTemporary (fromException → Just (HttpExceptionRequest _ (StatusCodeException e _))) = statusCode (responseStatus e) `elem` [503]
         isTemporary _ = False
-    req ← parseUrl url
+    req ← parseUrlThrow url
     manager ← newManager settings
     liftM (unpack . responseBody) $ httpLbs req manager
 
