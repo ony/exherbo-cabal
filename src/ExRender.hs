@@ -61,6 +61,8 @@ instance ExRenderPackage GenericPackageDescription where
     type ExPackageEnv GenericPackageDescription = ExCabalEnv
     exDispPkg env descr = exheres where
         nameSelf = pkgName . package $ packageDescription descr
+
+        ignoredPkgIds :: [PackageName]
         ignoredPkgIds = map (fromJust . simpleParse) ["base", "ghc", "ghc-prim"]
 
         ignoredDep (Dependency n _) | n `elem` ignoredPkgIds = True

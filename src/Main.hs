@@ -56,7 +56,7 @@ simpleFetch url = do
         isTemporary _ = False
     req ← parseUrlThrow url
     manager ← newManager settings
-    liftM (unpack . responseBody) $ httpLbs req manager
+    (unpack . responseBody) <$> httpLbs req manager
 
 licenseHints ∷ [(R.Regex, License)]
 licenseHints = [
@@ -94,7 +94,7 @@ fixLicense descr | isNothing maybeLicensePath = return descr
                             [x] → Just x
                             _ → Nothing
         adjustLicense = do
-            let licensePath = fromJust $ maybeLicensePath
+            let licensePath = fromJust maybeLicensePath
             licenseContent ← simpleFetch (packageUri ++ "/src/" ++ licensePath)
             license' ← guessLicense licenseContent
             case license' of
@@ -113,7 +113,7 @@ fetchPackageDescription pkgid = do
     let cabalFile = display (packageName pkgid) ++ ".cabal"
         packageUri = hackageBaseUri ++ display pkgid
         url = packageUri ++ "/" ++ cabalFile
-    ParseOk _ descr ← liftM parsePackageDescription $ simpleFetch url
+    ParseOk _ descr ← parsePackageDescription <$> simpleFetch url
     fixLicense descr
 
 data TargetCabal = TargetCabalFile FilePath
@@ -172,7 +172,7 @@ main = do
     targets' ← case targets params of
         Just xs → return xs
         Nothing →
-            liftM (map (either TargetInvalid id . targetParse) . lines) getContents
+            fmap (map (either TargetInvalid id . targetParse) . lines) getContents
 
     let output = case destFolder params of
             Nothing → const putStr -- output to stdout

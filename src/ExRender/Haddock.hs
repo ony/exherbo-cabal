@@ -34,4 +34,4 @@ instance ExRenderQ id => ExRenderQ (DocH mod id) where
         DocAName s → exDispQ s
         DocProperty s → exDispQ s
         DocExamples _ → empty -- XXX: examples are filtered out
-        _ → error $ "Unsupported haddock node"
+        _ → error "Unsupported haddock node"
