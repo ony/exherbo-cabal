@@ -12,10 +12,11 @@ import Control.Concurrent (threadDelay)
 import Control.Exception
 import Control.DeepSeq
 import Data.Maybe
+import Data.Monoid
 import Data.Default
 import Data.ByteString.Lazy.Char8 (unpack)
 
-import Options.Applicative
+import Options.Applicative hiding (maybeReader)
 
 import System.IO
 import System.FilePath
