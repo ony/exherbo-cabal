@@ -19,6 +19,7 @@ import qualified Data.Map as M
 import Control.Arrow ((&&&))
 
 import Distribution.Text
+import Distribution.Types.CondTree
 import Distribution.Package
 import Distribution.Version
 import Distribution.Compiler
@@ -156,9 +157,9 @@ collectDeps env view descr = concatMap build (view descr) where
 
     build t = condTreeConstraints t ++ concatMap buildOptional (condTreeComponents t)
 
-    buildOptional (eval → True, t, _) = build t
-    buildOptional (_, _, Just t) = build t
-    buildOptional (_, _, Nothing) = []
+    buildOptional (CondBranch (eval → True) t _) = build t
+    buildOptional (CondBranch _ _ (Just t)) = build t
+    buildOptional (CondBranch _ _ Nothing) = []
 
 collectLibDeps, collectBinDeps, collectTestDeps ∷ ExCabalEnv → GenericPackageDescription → [Dependency]
 collectLibDeps env = collectDeps env (maybeToList . condLibrary)

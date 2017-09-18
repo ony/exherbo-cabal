@@ -35,21 +35,21 @@ maybeExVersion = \case
         | a == b → Just $ char '=' <> disp a
 
     -- <x, <=x
-    (LowerBound (Version [0] []) InclusiveBound, ub) → Just $ exDisp ub
+    (LowerBound (versionNumbers -> [0]) InclusiveBound, ub) → Just $ exDisp ub
 
     -- >=x, >x
     (lb, NoUpperBound) → Just $ exDisp lb
 
-    (LowerBound (Version [] _) _, _) → Nothing
-    (_, UpperBound (Version [] _) _) → Nothing
+    (LowerBound (versionNumbers -> []) _, _) → Nothing
+    (_, UpperBound (versionNumbers -> []) _) → Nothing
     -- >=x.y && <x.y'
-    (LowerBound v@(Version a []) InclusiveBound, UpperBound (Version b []) ExclusiveBound)
+    (LowerBound v@(versionNumbers -> a) InclusiveBound, UpperBound (versionNumbers -> b) ExclusiveBound)
         | init a == init b && succ (last a) == last b →
             Just $ char '=' <> disp v <> char '*'
 
-    (LowerBound (Version [_] _) _, _) → Nothing
+    (LowerBound (versionNumbers -> [_]) _, _) → Nothing
     -- >=x.y.z && <x.y'
-    (LowerBound v@(Version a []) InclusiveBound, UpperBound (Version b []) ExclusiveBound)
+    (LowerBound v@(versionNumbers -> a) InclusiveBound, UpperBound (versionNumbers -> b) ExclusiveBound)
         | init a' == init b && succ (last a') == last b →
                 Just $ text "~>" <> disp v
             where a' = init a
@@ -77,16 +77,16 @@ exVersions = \case
         exVersions (lb, UpperBound v ExclusiveBound) ++ [char '=' <> disp v]
 
     -- >=x.a && <x.b
-    (LowerBound va@(Version a _) InclusiveBound, ub@(UpperBound (Version b _) ExclusiveBound))
+    (LowerBound va@(versionNumbers -> a) InclusiveBound, ub@(UpperBound (versionNumbers -> b) ExclusiveBound))
         | init a == init b → do
             c ← [init a ++ [i] | i ← [last a .. last b - 1]]
-            return $ char '=' <> disp (Version c []) <> char '*'
+            return $ char '=' <> disp (mkVersion c) <> char '*'
         | length a < length b →
-            char '=' <> disp va : exVersions (LowerBound (Version (a ++ [0]) []) InclusiveBound, ub)
+            char '=' <> disp va : exVersions (LowerBound (mkVersion (a ++ [0])) InclusiveBound, ub)
     _ → []
 
 instance ExRender VersionInterval where
-    exDisp (LowerBound (Version [0] []) InclusiveBound, NoUpperBound) = empty
+    exDisp (LowerBound (versionNumbers -> [0]) InclusiveBound, NoUpperBound) = empty
     exDisp (maybeExVersion → Just exVi) = exVi
     exDisp (lb, ub) = exDisp lb <> char '&' <> exDisp ub
 
