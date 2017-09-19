@@ -4,7 +4,7 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE UnicodeSyntax, ViewPatterns, LambdaCase #-}
+{-# LANGUAGE UnicodeSyntax, ViewPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
 

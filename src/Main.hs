@@ -1,6 +1,7 @@
 -- Copyright © 2015 Mykola Orliuk <virkony@gmail.com>
 -- Distributed under the terms of the GNU General Public License v2
 
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ViewPatterns, LambdaCase, UnicodeSyntax #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -17,7 +18,7 @@ import Data.Default
 import Data.ByteString.Lazy.Char8 (unpack)
 import Data.Time (getCurrentTime, utctDay, formatTime, defaultTimeLocale)
 
-import Options.Applicative hiding (maybeReader)
+import Options.Applicative
 
 import System.IO
 import System.FilePath
@@ -38,10 +39,12 @@ import qualified Text.Regex.PCRE.Light.Char8 as R
 
 import ExRender
 
+#if !MIN_VERSION_optparse_applicative(0,13,0)
 maybeReader ∷ (String → Maybe a) → ReadM a
 maybeReader f = eitherReader $ \case
     (f → Just x) → return x
     arg → Left $ "cannot parse value `" ++ arg ++ "'"
+#endif
 
 textAuto ∷ Text a ⇒ ReadM a
 textAuto = maybeReader simpleParse
