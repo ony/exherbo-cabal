@@ -8,7 +8,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module ExRender (ExCabalEnv(..), ExRenderPackage, exDisp, exDispQ, exRenderPkg) where
+module ExRender (ExCabalEnv(..), ExRenderPackage, exDisp, exDispQ, exRenderPkg, exDispCopyright) where
 
 import Data.Maybe
 import Data.List
@@ -43,11 +43,8 @@ instance Default ExCabalEnv where
         { exGHCVersion = case buildCompilerId of
             (CompilerId GHC ver) → ver
             x → error $ "Unsupported compiler " ++ show x
-        , exCopyright = vcat
-            [ "# Copyright 2015 Mykola Orliuk <virkony@gmail.com>"
-            , "# Distributed under the terms of the GNU General Public License v2"
-            ]
-        , exBugsTo = "virkony@gmail.com"
+        , exCopyright = exDispCopyright "2015" "" (exBugsTo def)
+        , exBugsTo = "nobody@localhost"
         }
 
 class ExRenderPackage a where
@@ -166,6 +163,13 @@ collectLibDeps, collectBinDeps, collectTestDeps ∷ ExCabalEnv → GenericPackag
 collectLibDeps env = collectDeps env (maybeToList . condLibrary)
 collectBinDeps env = collectDeps env (map snd . condExecutables)
 collectTestDeps env = collectDeps env (map snd . condTestSuites)
+
+-- | Build copyright header
+exDispCopyright ∷ String → String → String → Doc
+exDispCopyright year user email = vcat
+    [ "# Copyright" <+> text year <+> exDisp user <+> "<" <> text email <> ">"
+    , "# Distributed under the terms of the GNU General Public License v2"
+    ]
 
 -- | Render 'a' to a final Exheres
 exRenderPkg ∷ ExRenderPackage a ⇒ ExPackageEnv a → a → String

@@ -69,6 +69,10 @@ exField name x | length singleLine <= exWrapWidth = text singleLine
     where
         singleLine = name ++ "=\"" ++ dquoted x ++ "\""
 
+instance ExRender String where
+    exDisp "" = empty
+    exDisp s = text s
+
 instance ExRenderQ String where
     -- TODO: exDispQ = sep . map text . words . dquoted
     exDispQ = text . dquoted

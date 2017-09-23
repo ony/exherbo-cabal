@@ -15,6 +15,7 @@ import Data.Maybe
 import Data.Monoid
 import Data.Default
 import Data.ByteString.Lazy.Char8 (unpack)
+import Data.Time (getCurrentTime, utctDay, formatTime, defaultTimeLocale)
 
 import Options.Applicative hiding (maybeReader)
 
@@ -137,6 +138,8 @@ targetArguments = some (argument targetReader (metavar "TARGETS..."))
 data ExCabal =
     ExCabal
         { ghcVersion ∷ Version
+        , userName ∷ String
+        , userEmail ∷ String
         , destFolder ∷ Maybe FilePath
         , targets ∷ Maybe [TargetCabal]
         }
@@ -150,6 +153,18 @@ exCabalParser = ExCabal
         <> help "Target VERSION of GHC"
         <> showDefaultWith display
         <> value (exGHCVersion def)
+        )
+    <*> strOption
+        ( long "user-name" <> metavar "NAME"
+        <> help "User name for copyright header"
+        <> showDefault
+        <> value "Mr. Nobody"
+        )
+    <*> strOption
+        (long "user-email" <> metavar "EMAIL"
+        <> help "User email for copyright and bug-reports"
+        <> showDefault
+        <> value (exBugsTo def)
         )
     <*> optional (strOption
         ( long "dest-dir" <> short 'd'
@@ -168,7 +183,12 @@ main = do
             <> footerDoc (Just helpFooter)
             )
     params ← execParser opts
-    let env = def { exGHCVersion = ghcVersion params }
+    copyrightYear ← formatTime defaultTimeLocale "%Y" . utctDay <$> getCurrentTime
+    let env = def
+            { exGHCVersion = ghcVersion params
+            , exCopyright = exDispCopyright copyrightYear (userName params) (userEmail params)
+            , exBugsTo = userEmail params
+            }
     targets' ← case targets params of
         Just xs → return xs
         Nothing →
