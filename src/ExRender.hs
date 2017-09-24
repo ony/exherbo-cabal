@@ -97,7 +97,9 @@ instance ExRenderPackage GenericPackageDescription where
             "\""]
 
         pkgDescr = packageDescription descr
-
+        hackageRev = fmap snd
+                       . find (\(k, _) -> k == "x-revision")
+                       $ customFieldsPD pkgDescr
         hasLib = isJust $ condLibrary descr
         hasBin = not . null $ condExecutables descr
         hasMods = maybe False (not . null . exposedModules . condTreeData) . condLibrary $ descr
@@ -111,7 +113,8 @@ instance ExRenderPackage GenericPackageDescription where
                                  "has_hscolour=false",
                                  "has_profile=false"
                                  ]
-                exParams = spaces $ exHasLib <+> exHasBin <+> exHasOptions
+                exHackageRev = maybe empty (\r -> text $ "rev=" ++ r) hackageRev
+                exParams = spaces $ exHasLib <+> exHasBin <+> exHasOptions <+> exHackageRev
 
         exSlot = if not hasBin && hasLib then empty else exField "SLOT" "0"
         exheres = vcat [
