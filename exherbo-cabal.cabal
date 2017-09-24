@@ -63,7 +63,7 @@ library
     ExRender.License
 
   build-depends:
-    Cabal >=1.20 && <1.26,
+    Cabal >=1.20 && <2.1,
     base >=4.7 && <5,
     containers,
     data-default >=0.2 && <1,
@@ -100,7 +100,7 @@ executable exherbo-cabal
 
   -- Other library packages from which modules are imported.
   build-depends:
-    Cabal >=1.20 && <1.25,
+    Cabal >=1.20 && <2.1,
     ansi-wl-pprint >=0.6 && <0.7,
     base >=4.7 && <5,
     bytestring >=0.10 && <0.11,

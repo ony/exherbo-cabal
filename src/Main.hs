@@ -65,7 +65,7 @@ simpleFetch url = do
 licenseHints ∷ [(R.Regex, License)]
 licenseHints = [
     (R.compile "http://creativecommons\\.org/publicdomain/zero/1\\.0/" [R.multiline], UnknownLicense "CC0"),
-    (R.compile "http://www\\.apache\\.org/licenses/LICENSE-2\\.0" [R.multiline], Apache (Just $ Version [2, 0] [])),
+    (R.compile "http://www\\.apache\\.org/licenses/LICENSE-2\\.0" [R.multiline], Apache (Just $ mkVersion [2, 0])),
     (R.compile "GNU AFFERO GENERAL PUBLIC LICENSE\\s*Version 3," [R.multiline], UnknownLicense "AGPL-3"),
     (R.compile "Mozilla Public License Version 2\\.0$" [R.multiline], UnknownLicense "MPL-2")
     ]
