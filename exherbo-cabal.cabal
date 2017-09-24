@@ -95,7 +95,6 @@ executable exherbo-cabal
     FlexibleInstances,
     LambdaCase,
     OverloadedStrings,
-    UnicodeSyntax,
     ViewPatterns
 
   -- Other library packages from which modules are imported.
