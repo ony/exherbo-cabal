@@ -3,7 +3,6 @@
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
-{-# LANGUAGE UnicodeSyntax #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module ExRender.License () where
@@ -13,7 +12,7 @@ import Distribution.License
 
 import ExRender.Base
 
-exKnownLicenses ∷ [String]
+exKnownLicenses :: [String]
 exKnownLicenses = ["CC0", "AGPL-3"]
 
 instance ExRender License where
